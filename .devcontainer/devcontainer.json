@@ -1,0 +1,12 @@
+{
+  "name": "puter-super-agent",
+  "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "postStartCommand": "nohup python3 -m http.server 8080 --directory /workspaces/puter-super-agent > /tmp/app-server.log 2>&1 &",
+  "portsAttributes": {
+    "8080": {
+      "label": "puter-super-agent app",
+      "visibility": "public",
+      "onAutoForward": "notify"
+    }
+  }
+}

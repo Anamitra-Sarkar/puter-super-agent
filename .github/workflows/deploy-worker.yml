@@ -1,0 +1,24 @@
+name: Deploy Worker to Puter
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "__workers/**"
+      - ".github/workflows/deploy-worker.yml"
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy worker
+        uses: HeyPuter/puter-worker-deploy-action@v1.0.1
+        with:
+          worker_name: super-agent-api # publishes to super-agent-api.puter.work
+          puter_path: ~/Workers/super-agent-api/
+          source_path: __workers
+          entry_file: api.worker.js
+          puter_token: ${{ secrets.PUTER_TOKEN }}
