@@ -357,7 +357,6 @@ textarea{border-radius:18px}
 select{border-radius:12px}
 
 /* Sticky bottom composer */
-.app-dock #main{max-width:880px}
 .composer{position:sticky;bottom:12px;z-index:20;border-radius:22px}
 .composer-bar{display:flex;gap:8px;align-items:flex-end;background:var(--surface);
   border:1px solid var(--line);border-radius:999px;padding:7px 7px 7px 9px;box-shadow:var(--shadow);
@@ -415,8 +414,8 @@ select{border-radius:12px}
 .app-dock{display:flex;align-items:stretch}
 .app-dock #main{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center}
 .app-dock #main>*{width:100%;max-width:880px}
-.app-dock.starting #main{display:flex;flex-direction:column;justify-content:center;min-height:calc(100vh - 53px)}
-.app-dock.starting .composer{position:static}
+.app-dock.starting #main{justify-content:flex-start;min-height:calc(100vh - 53px)}
+.app-dock.starting #emptyState{flex:1;display:flex;flex-direction:column;justify-content:center}
 .dock{position:sticky;top:53px;height:calc(100vh - 53px);width:0;min-width:0;opacity:0;overflow:hidden;
   background:var(--surface);border-left:1px solid transparent;z-index:40;display:flex;flex-direction:column;flex-shrink:0;
   transition:width .38s var(--ease),opacity .3s var(--ease),border-color .3s}
