@@ -8,6 +8,10 @@
     { name: "vision", hint: "<question> — analyze the attached image" },
     { name: "speak", hint: "<text> — read aloud (OpenAI voice)" },
     { name: "browse", hint: "<url> — fetch + summarize a page" },
+    { name: "plan", hint: "<task> — draft a plan, approve, then build" },
+    { name: "deploy", hint: "[subdomain] — ship this app to *.puter.site" },
+    { name: "files", hint: "— list your Puter cloud files" },
+    { name: "compact", hint: "— summarize history to free context" },
     { name: "model", hint: "— open the model library" },
     { name: "new", hint: "— start a new chat" },
     { name: "help", hint: "— show all commands" },
@@ -114,9 +118,32 @@
       }
       case "browse": {
         if (!arg) return toast("Usage: /browse <url>", "info"), true;
-        el("browserUrl").value = arg;
-        window.PuterFiles.doFetch(true);
+        window.PuterFiles.doFetch(arg, true);
         toast("Fetching + summarizing…", "info");
+        return true;
+      }
+      case "plan": {
+        if (!arg) return toast("Usage: /plan <task>", "info"), true;
+        runPlan(arg);
+        return true;
+      }
+      case "deploy": {
+        askDeploy(arg);
+        return true;
+      }
+      case "files": {
+        try {
+          const items = await puter.fs.readdir(".");
+          const list = items.map((i) => i.path || i.name).slice(0, 60);
+          window.PuterAgent.addMsg("assistant",
+            "<b>📁 Puter cloud files</b><br>" + (list.length ? list.map((p) => `<code>${p.replace(/</g, "&lt;")}</code>`).join("<br>") : "(empty)"));
+        } catch (e) {
+          window.PuterAgent.addMsg("assistant", window.PuterUI.errorCard(e, "files"));
+        }
+        return true;
+      }
+      case "compact": {
+        await window.PuterAgent.compactHistory("manual /compact");
         return true;
       }
       case "model":
@@ -135,7 +162,60 @@
     }
   }
 
-  window.PuterCommands = { renderPalette, hide, handle, pick, COMMANDS,
+  async function runPlan(task) {
+    const A = window.PuterAgent;
+    A.addMsg("user", "📋 <b>/plan</b> " + task.replace(/</g, "&lt;"));
+    A.timeline("📋 drafting plan…");
+    const model = (document.getElementById("modelSelect") || {}).value || "gpt-5.6-sol";
+    try {
+      const resp = await puter.ai.chat(
+        [{ role: "system", content: "Draft a short numbered implementation plan for the task. Be concrete. Do NOT implement yet — end by stopping." },
+         { role: "user", content: task }],
+        { model, normalize: true });
+      const plan = window.PuterModels.extractText(resp);
+      const body = A.addMsg("assistant", `<b>📋 Proposed plan</b>` + A.md(plan),
+        "Plan:\n" + plan.slice(0, 3000));
+      const row = document.createElement("div");
+      row.className = "row plan-btns";
+      row.innerHTML = `<button class="btn primary sm" data-a="go">Approve & build</button>
+        <button class="btn sm" data-a="edit">Edit</button>
+        <button class="btn ghost sm" data-a="no">Discard</button>`;
+      body.appendChild(row);
+      const lock = () => row.querySelectorAll("button").forEach((b) => (b.disabled = true));
+      row.querySelector('[data-a="go"]').onclick = () => {
+        lock();
+        A.send(`Build this approved plan step by step. If UI, preview it.\n\nPLAN:\n${plan}\n\nORIGINAL TASK: ${task}`, [], "coder");
+      };
+      row.querySelector('[data-a="edit"]').onclick = () => {
+        lock();
+        const inp = document.getElementById("userInput");
+        inp.value = "Build this (edited plan):\n" + plan + "\n\nOriginal task: " + task;
+        inp.focus();
+        toast("Plan dropped into the composer — edit then Send", "info");
+      };
+      row.querySelector('[data-a="no"]').onclick = () => { lock(); toast("Plan discarded", "info"); };
+    } catch (e) {
+      A.addMsg("assistant", window.PuterUI.errorCard(e, model));
+    }
+  }
+
+  function askDeploy(preset) {
+    const A = window.PuterAgent;
+    const body = A.addMsg("assistant",
+      `<b>🚀 Deploy to Puter</b><p class="muted">Ship this app to a public <code>*.puter.site</code> (backend worker rides along).</p>
+       <div class="row"><input id="deploySubInline" placeholder="subdomain e.g. my-agent" value="${(preset || "").replace(/"/g, "")}" />
+       <button class="btn primary sm" id="deployGoInline">Deploy</button></div><div class="md" id="deployInlineOut" style="display:none"></div>`,
+      "[deploy]");
+    const go = () => {
+      const sub = (document.getElementById("deploySubInline") || {}).value || "";
+      const out = document.getElementById("deployInlineOut");
+      if (out) out.style.display = "";
+      window.PuterDeploy.deploy(sub, null, out);
+    };
+    body.querySelector("#deployGoInline").onclick = go;
+  }
+
+  window.PuterCommands = { renderPalette, hide, handle, pick, COMMANDS, runPlan,
     move: (d) => { const m = matches() || []; activeIdx = (activeIdx + d + m.length) % Math.max(1, m.length); renderPalette(); },
     enter: () => { const m = matches() || []; if (m[activeIdx]) pick(m[activeIdx].name); } };
 })();

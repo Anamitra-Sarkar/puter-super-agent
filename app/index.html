@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>App — Puter Super-Agent</title>
+<script src="https://js.puter.com/v2/"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="../styles.css" />
+</head>
+<body>
+<header id="topbar">
+  <a class="brand" href="../" style="text-decoration:none;color:inherit"><span class="brand-dot"></span><span>Super-Agent</span></a>
+  <button id="modelPill" class="model-pill" title="Choose model">🧠 <span id="modelPillLabel">…</span> ▾</button>
+  <span id="statusPill" class="pill">checking…</span>
+  <div class="top-right">
+    <button id="btnDock" class="btn ghost sm" title="Toggle workspace dock (preview / code / secrets)">👁</button>
+    <button id="btnMemory" class="btn ghost sm" title="Agent memory (MEMORY.md)">🧠</button>
+    <button id="btnHistory" class="btn ghost sm" title="Chat history">🕘</button>
+    <button id="btnSettings" class="btn ghost sm" title="Settings & skills">⚙️</button>
+    <div class="chip-wrap">
+      <button id="accountChip" class="account-chip"><span id="accountAvatar" class="avatar">?</span><span id="accountName">…</span> ▾</button>
+      <div id="accountMenu" class="menu hidden">
+        <div class="menu-head"><b id="accountName2">…</b><div id="accountUsage" class="muted small">Usage: —</div></div>
+        <button id="btnSignOut" class="btn ghost sm" style="width:100%">Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<select id="modelSelect" class="hidden" aria-hidden="true"></select>
+<input type="hidden" id="agentMode" value="agent" />
+<input type="checkbox" id="swarmSynth" class="hidden" checked aria-hidden="true" />
+<select id="aggregatorModel" class="hidden" aria-hidden="true"><option value="gpt-5.6-luna">gpt-5.6-luna</option></select>
+
+<div id="app" class="app-dock">
+  <main id="main">
+    <div id="emptyState" class="hero slim">
+      <h1>What should we do?</h1>
+      <p class="muted">Chat normally — or type <code>/</code> for code, plan, swarm, image, voice &amp; more.</p>
+      <div class="chips">
+        <button class="chip suggest" data-prompt="/plan Build a landing page for a coffee brand">📋 /plan a landing page</button>
+        <button class="chip suggest" data-prompt="/swarm Which is better for a coding agent, GPT-5.6 Sol or Claude Sonnet 5?">⚖️ /swarm a question</button>
+        <button class="chip suggest" data-prompt="/image A cozy cabin in the snow, warm light">🎨 /image something</button>
+      </div>
+    </div>
+    <div id="timeline" class="timeline"></div>
+    <div id="chatLog" class="chat-log"></div>
+    <div class="composer" id="composer">
+      <div id="palette" class="palette hidden"><div id="paletteList"></div></div>
+      <div id="queueRow" class="queue-row hidden"><span class="muted small">Queued:</span><span id="queueList"></span></div>
+      <div id="attachRow" class="attach-row hidden"><span id="attachList"></span></div>
+      <div id="effortRow" class="effort-row" title="Reasoning effort (OpenAI models)">
+        <span class="muted small">Effort</span>
+        <button class="effort-btn" data-e="low">Low</button>
+        <button class="effort-btn active" data-e="medium">Med</button>
+        <button class="effort-btn" data-e="high">High</button>
+        <button class="effort-btn" data-e="xhigh">Max</button>
+      </div>
+      <div class="composer-bar">
+        <button id="btnAttach" class="attach-btn" title="Attach files">+</button>
+        <input type="file" id="fileInput" class="hidden" multiple />
+        <textarea id="userInput" rows="1" placeholder="Ask anything…  ( / for commands · Enter send · ⇧↵ newline · ⌃↵ send now )"></textarea>
+        <button id="btnSend" class="btn primary send-btn" title="Send">→</button>
+      </div>
+      <div class="composer-meta">
+        <span id="tokenPill" class="token-pill" title="Context usage"><span class="tok-dot"></span><span id="tokenText">◉ —</span><span class="tok-bar"><span id="tokenFill"></span></span></span>
+      </div>
+    </div>
+
+    <aside id="dock" class="dock hidden">
+      <div class="dock-tabs">
+        <button class="dock-tab active" data-dtab="preview">👁 Preview</button>
+        <button class="dock-tab" data-dtab="code">&lt;/&gt; Code</button>
+        <button class="dock-tab" data-dtab="secrets">🔑 Secrets</button>
+        <span class="spacer"></span>
+        <button id="btnDockClose" class="btn sm ghost">✕</button>
+      </div>
+      <div id="dpane-preview" class="dock-pane active">
+        <div id="previewDock">
+          <iframe id="previewFrame" sandbox="allow-scripts" title="sandbox preview"></iframe>
+          <pre id="previewLog" class="preview-log"></pre>
+          <div class="row"><button id="btnPreviewFull" class="btn sm ghost">Fullscreen</button><button id="btnPreviewClear" class="btn sm ghost">Clear</button></div>
+        </div>
+      </div>
+      <div id="dpane-code" class="dock-pane">
+        <div class="row">
+          <button id="btnCodeUpload" class="btn sm">+ Upload to codebase</button>
+          <input type="file" id="codeFileInput" class="hidden" multiple />
+          <button id="btnCodeClear" class="btn sm ghost">Clear all</button>
+        </div>
+        <div class="code-layout"><div id="codeTree" class="code-tree"></div><div id="codeView" class="code-view"></div></div>
+      </div>
+      <div id="dpane-secrets" class="dock-pane">
+        <p class="muted small">Keys live <b>only in this browser</b> — never in the repo or cloud. The agent can read them (with your approval each time) to verify builds with real credentials.</p>
+        <div id="secretList"></div>
+        <div class="row"><input id="secretName" placeholder="NAME e.g. STRIPE_KEY" /><input id="secretValue" type="password" placeholder="value" /><button id="btnSecretAdd" class="btn primary sm">Add</button></div>
+      </div>
+    </aside>
+  </main>
+</div>
+
+<div id="historyPanel" class="drawer hidden">
+  <div class="drawer-head"><b>🕘 History</b><button id="btnHistoryClose" class="btn sm ghost">✕</button></div>
+  <div class="row"><button id="btnNewChat" class="btn sm">+ New chat</button><button id="btnExportSession" class="btn ghost sm">Export</button></div>
+  <div id="sessionList" class="session-list"></div>
+</div>
+
+<div id="settingsModal" class="modal-wrap hidden">
+  <div class="modal-card wide">
+    <h3>⚙️ Settings &amp; skills</h3>
+    <label class="side-label" style="margin-top:10px">Tool approval</label>
+    <select id="approvalMode"><option value="plan">Plan (dry-run)</option><option value="auto" selected>Auto (reads auto, writes ask)</option><option value="yolo">Yolo (ask once)</option></select>
+    <label class="side-label" style="margin-top:10px">System prompt (blank = default)</label>
+    <textarea id="systemPrompt" rows="2" placeholder="Optional system instruction…"></textarea>
+    <div style="margin-top:8px">
+      <label class="chk"><input type="checkbox" id="streamToggle" checked /> Stream responses</label>
+      <label class="chk"><input type="checkbox" id="webSearchToggle" /> Web search (OpenAI models)</label>
+    </div>
+    <h3 style="margin-top:14px">🎯 Skills <span class="tag">customizable</span></h3>
+    <p class="muted small">Activate a skill to steer the AI — or create your own. Active skill is injected into every request.</p>
+    <label class="side-label">Active skill</label>
+    <select id="skillSelect"><option value="">General assistant</option></select>
+    <div id="skillList"></div>
+    <div class="row"><input id="skillId" placeholder="id e.g. sql-expert" /><input id="skillName" placeholder="Name" /></div>
+    <div class="row"><input id="skillPrompt" placeholder="System prompt for this skill…" /></div>
+    <div class="row"><button id="btnSkillSave" class="btn primary sm">Save skill</button></div>
+    <div class="modal-btns"><button id="btnSettingsClose" class="btn primary">Done</button></div>
+  </div>
+</div>
+
+<div id="memoryModal" class="modal-wrap hidden">
+  <div class="modal-card wide">
+    <h3>🧠 MEMORY.md <span class="tag">survives compaction</span></h3>
+    <p class="muted small" id="memoryMeta">auto-saved after each task</p>
+    <textarea id="memoryView" rows="12" placeholder="Nothing remembered yet — it fills in as you work."></textarea>
+    <div class="modal-btns">
+      <button id="btnMemoryClear" class="btn ghost">Clear</button>
+      <button id="btnMemorySave" class="btn primary">Save</button>
+      <button id="btnMemoryClose" class="btn">Done</button>
+    </div>
+  </div>
+</div>
+
+<div id="libraryOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="overlay-head"><h3>🧠 Choose a model</h3><button id="btnLibraryClose" class="btn sm ghost">✕</button></div>
+    <div class="row"><input id="librarySearch" placeholder="Search models…" />
+      <button class="btn sm lib-filter" data-v="All">All</button>
+      <button class="btn sm ghost lib-filter" data-v="OpenAI">OpenAI</button>
+      <button class="btn sm ghost lib-filter" data-v="Claude">Claude</button>
+      <button id="btnLibRefresh" class="btn sm ghost" title="Merge live list">↻</button></div>
+    <div id="libraryGrid" class="lib-grid"></div>
+  </div>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="modalWrap" class="modal-wrap hidden">
+  <div class="modal-card">
+    <h3 id="modalTitle">Confirm</h3>
+    <div id="modalBody" class="modal-body"></div>
+    <div class="modal-btns">
+      <button id="modalCancel" class="btn ghost">Cancel</button>
+      <button id="modalOk" class="btn primary">Allow</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/models.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/tokens.js"></script>
+<script src="../js/tools.js"></script>
+<script src="../js/skills.js"></script>
+<script src="../js/memory.js"></script>
+<script src="../js/codebase.js"></script>
+<script src="../js/secrets.js"></script>
+<script src="../js/sandbox.js"></script>
+<script src="../js/agent.js"></script>
+<script src="../js/swarm.js"></script>
+<script src="../js/commands.js"></script>
+<script src="../js/library.js"></script>
+<script src="../js/files.js"></script>
+<script src="../js/sessions.js"></script>
+<script src="../js/deploy.js"></script>
+<script src="../js/app.js"></script>
+</body>
+</html>

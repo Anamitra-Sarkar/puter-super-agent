@@ -1,67 +1,139 @@
-/* Core chat + agent orchestrator: streaming, tool-loop, timeline, stop. */
+/* Core agent: multi-turn history, think/reasoning split, usage, compaction,
+ * effort, loop guards, queue hooks. Temperature/max_tokens intentionally omitted
+ * (model defaults = best; effectively unlimited output). */
 (function () {
   const M = () => window.PuterModels;
   const T = () => window.PuterTools;
+  const TK = () => window.PuterTokens;
   let stopFlag = false;
-  let yoloApproved = false;
+  let busy = false;
+  let busyHandler = null;
+  let gen = 0; // generation counter: stale in-flight work aborts when gen changes
+  let activeGen = 0;
+  let history = []; // persistent multi-turn memory (user/assistant/tool only)
+  let pendingCompaction = null; // {artifact, text}
+  let ledger = []; // task ledger: every attempted tool call {sig,name,args,ok,denied,note,at}
+  let lastTurn = null; // {user, tools:[]} for MEMORY.md learning
+  let thinkDelegateOn = false;
 
   function el(id) { return document.getElementById(id); }
   function md(text) {
-    try {
-      if (window.marked) return marked.parse(String(text));
-    } catch {}
+    try { if (window.marked) return marked.parse(String(text)); } catch {}
     return escapeHtml(String(text));
   }
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
-  function addMsg(role, html, raw) {
+  function setBusy(v) {
+    busy = v;
+    if (busyHandler) { try { busyHandler(v); } catch {} }
+  }
+  function isBusy() { return busy; }
+  function setBusyHandler(fn) { busyHandler = fn; }
+  function stop() { stopFlag = true; gen++; }
+
+  function ensureThinkDelegate() {
+    if (thinkDelegateOn) return;
+    thinkDelegateOn = true;
+    document.addEventListener("click", (e) => {
+      const h = e.target.closest(".think-head");
+      if (!h) return;
+      h.parentElement.classList.toggle("open");
+    });
+  }
+
+  function thinkHTML(think, secs, done) {
+    if (!think) return "";
+    const toks = TK().fmt(TK().est(think));
+    const label = done ? `Thought for ${secs}s · ~${toks} tokens` : "Thinking…";
+    return `<div class="think${done ? "" : " live"}"><button class="think-head">💭 ${label} <span class="chev">⌄</span></button>` +
+      `<div class="think-body">${escapeHtml(think)}</div></div>`;
+  }
+  function paintThink(msgEl, think, t0, done) {
+    let box = msgEl.querySelector(".think-slot");
+    if (!box) {
+      box = document.createElement("div");
+      box.className = "think-slot";
+      msgEl.insertBefore(box, msgEl.firstChild);
+    }
+    const secs = ((performance.now() - t0) / 1000).toFixed(0);
+    box.innerHTML = thinkHTML(think, secs, done);
+  }
+
+  function addMsg(role, html, raw, think) {
+    ensureThinkDelegate();
     const hero = document.getElementById("emptyState");
     if (hero) hero.classList.add("bye");
     const log = el("chatLog");
     const d = document.createElement("div");
     d.className = "msg " + role;
-    d.innerHTML = `<div class="role">${role === "user" ? "You" : "Assistant · " + escapeHtml(el("modelSelect").value)}</div><div class="body">${html}</div>`;
+    const label = role === "user" ? "You" : "Assistant · " + escapeHtml(model());
+    d.innerHTML = `<div class="role">${label}</div>` +
+      (think ? thinkHTML(think, "–", true) : "") +
+      `<div class="body">${html}</div>`;
     log.appendChild(d);
     log.scrollTop = log.scrollHeight;
-    if (window.PuterSessions) window.PuterSessions.note(role, raw != null ? raw : d.textContent);
+    if (window.PuterSessions && raw !== "__skip__") window.PuterSessions.note(role, raw != null ? raw : d.textContent, think || null);
     return d.querySelector(".body");
   }
+
+  function model() { const s = el("modelSelect"); return s ? s.value : M().DEFAULT_MODEL; }
+
+  function opts() {
+    const o = { model: model(), normalize: true };
+    const win = M().contextWindow(o.model).size;
+    o.compaction = { trigger_tokens: Math.max(20000, win - 30000) };
+    try {
+      const eff = window.PuterEffort && window.PuterEffort.value();
+      if (eff && M().supportsEffort(o.model)) o.reasoning_effort = eff;
+    } catch {}
+    return o;
+  }
+
+  function skillPrompt(override) {
+    const customEl = document.getElementById("systemPrompt");
+    const custom = customEl ? customEl.value.trim() : "";
+    let skilText = "";
+    if (window.PuterSkills) {
+      const id = override || window.PuterSkills.selected();
+      const s = id && window.PuterSkills.get(id);
+      if (s) skilText = s.prompt;
+    } else {
+      const sel = document.getElementById("skillSelect");
+      const s = override || (sel && sel.value) || "";
+      const presets = {
+        coder: "You are an expert coding assistant. Write correct, runnable code. When asked for a UI, ALSO call run_code_preview with the full HTML (and a path like index.html) so the user can see it.",
+        researcher: "You are a research assistant. Prefer fresh info: use web_search results and web_fetch for sources, cite URLs.",
+        writer: "You are a professional writer. Clear, structured, engaging prose with headings.",
+        reviewer: "You are a strict code reviewer. Find bugs, edge cases, and suggest concrete fixes.",
+      };
+      skilText = presets[s] || "";
+    }
+    return [skilText, custom].filter(Boolean).join("\n\n") || null;
+  }
+
   function timeline(text) {
     const t = el("timeline");
+    if (!t) return null;
     const d = document.createElement("div");
     d.className = "t";
     d.textContent = text;
     t.appendChild(d);
     return d;
   }
-  function clearTimeline() { el("timeline").innerHTML = ""; yoloApproved = false; }
-  function stop() { stopFlag = true; }
-
-  function opts() {
-    const o = { model: el("modelSelect").value, normalize: true };
-    const t = parseFloat(el("temperature").value);
-    if (!Number.isNaN(t)) o.temperature = t;
-    const mt = parseInt(el("maxTokens").value, 10);
-    if (!Number.isNaN(mt) && mt > 0) o.max_tokens = mt;
-    return o;
+  function clearTimeline() {
+    const t = el("timeline");
+    if (t) t.innerHTML = "";
+    yoloApproved = false;
   }
-  function skillPrompt(override) {
-    const sel = document.getElementById("skillSelect");
-    const s = override || (sel && sel.value) || "";
-    const customEl = document.getElementById("systemPrompt");
-    const custom = customEl ? customEl.value.trim() : "";
-    const presets = {
-      coder: "You are an expert coding assistant. Write correct, runnable code. When asked for a UI, ALSO call run_code_preview with the full HTML so the user can see it.",
-      researcher: "You are a research assistant. Prefer fresh info: use web_search results and web_fetch for sources, cite URLs.",
-      writer: "You are a professional writer. Clear, structured, engaging prose with headings.",
-      reviewer: "You are a strict code reviewer. Find bugs, edge cases, and suggest concrete fixes.",
-    };
-    return [presets[s], custom].filter(Boolean).join("\n\n") || null;
-  }
+  let yoloApproved = false;
 
+  function approvalMode() {
+    const s = document.getElementById("approvalMode");
+    return s ? s.value : "auto";
+  }
   async function confirmTool(name, args) {
-    const mode = el("approvalMode").value;
+    const mode = approvalMode();
     if (mode === "plan") {
       timeline(`[dry-run] would call ${name} ${JSON.stringify(args).slice(0, 200)}`);
       return false;
@@ -82,158 +154,365 @@
       "Allow");
   }
 
-  /** Non-streaming tool loop (max 6 steps), then streams the final answer. */
+  function meter(usedEst, exact, win) {
+    if (window.PuterMeter) { try { window.PuterMeter.update(usedEst, win, exact); } catch {} }
+  }
+  function tokFooter(usage, fallbackText) {
+    if (usage) return `<div class="tok-foot">⚡ ${usage.in.toLocaleString()} in · ${usage.out.toLocaleString()} out</div>`;
+    return `<div class="tok-foot">⚡ ~${TK().fmt(TK().est(fallbackText))} tokens</div>`;
+  }
+
+  async function learnLast(fullText) {
+    if (!lastTurn || !window.PuterMemory) return;
+    try { await window.PuterMemory.learnFromTurn(lastTurn.user, fullText, lastTurn.tools); } catch {}
+    lastTurn = null;
+  }
+
+  /** Summarize history into a compact replacement (manual /compact + auto). */
+  async function compactHistory(reason) {
+    if (!history.length) return false;
+    timeline(`🗜 compacting context (${reason})…`);
+    const transcript = history.map((m) => {
+      const c = typeof m.content === "string" ? m.content : JSON.stringify(m.content).slice(0, 500);
+      return `${m.role.toUpperCase()}: ${c.slice(0, 1500)}`;
+    }).join("\n\n").slice(0, 24000);
+    try {
+      const resp = await puter.ai.chat(
+        [{ role: "system", content: "Summarize this conversation densely: key facts, decisions, code/files produced, open tasks. Under 1500 words." },
+         { role: "user", content: transcript }],
+        { model: "gpt-5.4-nano", normalize: true });
+      const summary = M().extractText(resp);
+      const recent = history.slice(-6);
+      history = [
+        { role: "user", content: "[Context compacted. Summary of earlier conversation:]\n" + summary },
+        ...recent,
+      ];
+      pendingCompaction = null;
+      timeline("🗜 compacted — kept summary + last 6 turns");
+      if (window.PuterUI) window.PuterUI.toast("Context compacted", "ok");
+      meter(TK().estMessages(history), false, M().contextWindow(model()).size);
+      return true;
+    } catch (e) {
+      timeline("compact failed: " + (e.message || e));
+      return false;
+    }
+  }
+
+  async function autoCompactCheck() {
+    const win = M().contextWindow(model()).size;
+    const used = TK().estMessages(history);
+    meter(used, false, win);
+    if (used > win - 30000) {
+      await compactHistory("auto (context nearly full, 30k spared)");
+    }
+  }
+
   async function send(text, attachments, skill) {
+    if (busy) return false;
+    const my = ++gen;
+    const alive = () => !stopFlag && my === gen;
+    activeGen = my;
     stopFlag = false;
-    el("btnStop").disabled = false;
+    setBusy(true);
+    const stopBtn = document.getElementById("btnStop");
+    if (stopBtn) stopBtn.disabled = false;
     clearTimeline();
-    const mode = el("agentMode").value;
-    const useTools = mode === "agent";
-    const withSearch = el("webSearchToggle").checked;
-    const stream = el("streamToggle").checked;
+    const withSearch = (() => { const s = document.getElementById("webSearchToggle"); return !!(s && s.checked); })();
+    const streamOn = (() => { const s = document.getElementById("streamToggle"); return !s || s.checked; })();
     const base = opts();
     const sys = skillPrompt(skill);
 
-    addMsg("user", md(text) + (attachments && attachments.length ? `<p class="muted">📎 ${attachments.length} attachment(s)</p>` : ""));
-    const media = attachments && attachments.find((a) => a.kind === "image");
-    let messages = [];
-    if (sys) messages.push({ role: "system", content: sys });
-    const textCtx = (attachments || []).filter((a) => a.kind === "text").map((a) => `\n\n[attached ${a.name}]:\n${a.text.slice(0, 8000)}`).join("");
-    messages.push({ role: "user", content: text + textCtx });
-
     try {
-      // Simple vision fast-path: image + no tools → direct media call
-      if (media && !useTools && mode === "chat") {
+      await autoCompactCheck();
+      const textCtx = (attachments || []).filter((a) => a.kind === "text")
+        .map((a) => `\n\n[attached ${a.name}]:\n${a.text.slice(0, 8000)}`).join("");
+      const media = attachments && attachments.find((a) => a.kind === "image");
+      const userMsg = { role: "user", content: text + textCtx };
+      lastTurn = { user: text, tools: [] };
+      addMsg("user", md(text) + (attachments && attachments.length ? `<p class="muted">📎 ${attachments.length} attachment(s)</p>` : ""));
+
+      // Vision fast-path (single turn, no tools)
+      if (media) {
         timeline(`vision via ${base.model} …`);
-        const body = await streamOrNot(text + textCtx, media.payload, base, stream);
-        if (stopFlag) timeline("stopped.");
-        return;
+        await runSingle(text + textCtx, media.payload, base, streamOn);
+        return true;
       }
-      if (!useTools || mode === "compare" || mode === "pipeline") {
-        const body = await streamOrNot(messages, null, base, stream);
-        if (stopFlag) timeline("stopped.");
-        return;
+
+      // Build working messages: system + MEMORY.md + compaction artifact + history + new user turn
+      const working = [];
+      if (sys) working.push({ role: "system", content: sys });
+      try {
+        const mem = window.PuterMemory ? await window.PuterMemory.load() : "";
+        if (mem) working.push({ role: "system", content: "[MEMORY.md — persistent notes from earlier work. Trust this over guesses; do not redo completed/failed items without a new approach.]\n" + mem.slice(0, 3000) });
+      } catch {}
+      if (pendingCompaction) {
+        working.push({ role: "assistant", content: [pendingCompaction.artifact, { type: "text", text: pendingCompaction.text }] });
+        pendingCompaction = null;
       }
-      // Agent loop
+      working.push(...history, userMsg);
+
       const tools = T().schemaForChat(withSearch);
+      const seenTools = {};
       let steps = 0;
+      let exactUsage = null;
       for (;;) {
-        if (stopFlag) { timeline("stopped."); return; }
+        if (stopFlag || activeGen !== gen) break;
         if (++steps > 6) { timeline("tool budget (6) reached — answering with what I have."); break; }
         timeline(`thinking (step ${steps}, ${base.model})…`);
-        const resp = await puter.ai.chat(messages, { ...base, tools });
+        const resp = await puter.ai.chat(working, { ...base, tools });
+        const u = TK().readUsage(resp);
+        if (u) { exactUsage = u; meter(u.in + u.out, true, M().contextWindow(base.model).size); }
+        if (resp && resp.compaction) pendingCompaction = { artifact: resp.compaction, text: M().extractText(resp) };
         const calls = M().toolCallsOf(resp);
-        // Streaming-style tool chunks can also appear; normalize defensively:
-        if (!calls.length && resp && resp.type === "tool_use") calls.push(resp);
         if (!calls.length) {
           const finalText = M().extractText(resp);
-          messages.push({ role: "assistant", content: finalText });
-          const body = addMsg("assistant", md(finalText), finalText);
-          void body;
-          return;
+          const think = resp && resp.message ? resp.message.reasoning : null;
+          working.push({ role: "assistant", content: finalText });
+          history = working.filter((m) => m.role !== "system");
+          finish(finalText, think, exactUsage, resp && resp.finish_reason);
+          return true;
         }
-        // Execute tool calls (sequential for clarity)
-        messages.push(toAssistantMsg(resp));
+        working.push(toAssistantMsg(resp));
         for (const c of calls) {
           const name = c.function ? c.function.name : c.name;
           let args = {};
           try { args = JSON.parse(c.function ? c.function.arguments : JSON.stringify(c.input || {})); } catch {}
-          if (withSearch && name === undefined && c.type === "web_search") continue;
+          const sig = name + ":" + JSON.stringify(args);
+          // Task ledger: never blindly redo what was already tried.
+          const prior = ledger.filter((e) => e.sig === sig).slice(-1)[0];
+          if (prior && !prior.ok) {
+            const note = prior.denied
+              ? `You already tried ${name} with identical arguments and the USER DENIED it (${prior.note || "no reason given"}). Do NOT call it again — ask the user or try a different approach.`
+              : `You already tried ${name} with identical arguments and it FAILED (${prior.note || "no output"}). Do NOT repeat the same call — diagnose and try a different approach.`;
+            timeline(`↩ ledger: skipped repeat ${name} (previously ${prior.denied ? "denied" : "failed"})`);
+            working.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: note });
+            continue;
+          }
+          if (prior && prior.ok) {
+            timeline(`↩ ledger: reused prior result for ${name}`);
+            working.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: `Already completed earlier with the same arguments. Result was: ${prior.note || "(done)"}. Do not redo it — build on it.` });
+            continue;
+          }
+          seenTools[sig] = (seenTools[sig] || 0) + 1;
+          if (seenTools[sig] >= 3) {
+            // Loop detector: ask the user before stopping (or continuing).
+            const choice = await window.PuterUI.chooseModal(
+              "🔁 Possible loop detected",
+              `${name} was called 3× with identical arguments in this turn.\n\nStop the agent, or let it continue 3 more attempts?`,
+              ["Stop agent", "Continue 3 more"]);
+            if (choice !== 1) {
+              timeline(`⛔ loop stopped by user at ${name} ×3`);
+              working.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: "Stopped: the user judged this a loop. Summarize what was tried and ask how to proceed." });
+              steps = 99; // force exit to final answer
+              break;
+            }
+            timeline(`▶ user allowed 3 more attempts of ${name}`);
+            seenTools[sig] = 0;
+          }
           const ok = await confirmTool(name, args);
           if (!ok) {
-            messages.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: "User denied this tool call." });
+            working.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: "User denied this tool call." });
             timeline(`denied ${name}`);
+            ledger.push({ sig, name, args, ok: false, denied: true, note: "denied by user", at: Date.now() });
+            if (lastTurn) lastTurn.tools.push({ name, args, failed: false, denied: true });
             continue;
           }
           const tick = timeline(`⚙ ${name} …`);
           try {
-            const out = await T().execute(name, args, {
-              onImage: (img, p) => {
-                const o = document.getElementById("imgOut");
-                if (o) { o.prepend(img); timeline("image shown in Image tab"); }
-                else {
-                  img.style.maxWidth = "100%";
-                  const b = addMsg("assistant", `<p><b>🎨 ${escapeHtml(p || "")}</b></p>`, "[image] " + (p || ""));
-                  b.appendChild(img);
-                }
-                window.PuterUI.toast("Image ready", "ok");
-              },
-              onAudio: (a) => { const o = document.getElementById("ttsOut"); o.innerHTML = ""; a.setAttribute("controls", ""); o.appendChild(a); a.play().catch(() => {}); window.PuterUI.toast("Playing audio", "ok"); },
-              onPreview: (html, title) => { window.PuterSandbox.render(html, title); window.PuterUI.toast("Preview rendered below", "ok"); },
-            });
-            messages.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: String(out).slice(0, 12000) });
-            tick.textContent = `⚙ ${name} — done`;
+            const out = await T().execute(name, args, ctxHooks());
+            working.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: String(out).slice(0, 12000) });
+            if (tick) tick.textContent = `⚙ ${name} — done`;
+            ledger.push({ sig, name, args, ok: true, note: String(out).slice(0, 300), at: Date.now() });
+            if (lastTurn) lastTurn.tools.push({ name, args });
           } catch (e) {
-            messages.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: "Tool error: " + (e && e.message || e) });
-            tick.textContent = `⚙ ${name} — error: ${(e && e.message) || e}`;
+            working.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: "Tool error: " + (e && e.message || e) });
+            if (tick) tick.textContent = `⚙ ${name} — error: ${(e && e.message) || e}`;
+            ledger.push({ sig, name, args, ok: false, note: String((e && e.message) || e).slice(0, 300), at: Date.now() });
+            if (lastTurn) lastTurn.tools.push({ name, args, failed: true, note: String((e && e.message) || e).slice(0, 200) });
           }
         }
-      }
-      // Final answer streamed
-      timeline("writing final answer…");
-      const last = await puter.ai.chat(messages, { ...base, stream });
-      if (stream && last && typeof last[Symbol.asyncIterator] === "function") {
-        const body = addMsg("assistant", "", "");
-        body.classList.add("streaming");
-        let full = "";
-        for await (const part of last) {
-          if (stopFlag) break;
-          if (part && part.text) { full += part.text; body.innerHTML = md(full); }
+        if (steps >= 99) {
+          timeline("writing final answer…");
+          try {
+            const last = await puter.ai.chat(working, { ...base });
+            const finalText = M().extractText(last);
+            working.push({ role: "assistant", content: finalText });
+            history = working.filter((m) => m.role !== "system");
+            finish(finalText, null, TK().readUsage(last), null);
+          } catch (e) {
+            addMsg("assistant", window.PuterUI.errorCard(e, base.model));
+          }
+          return true;
         }
-        body.classList.remove("streaming");
-        window.PuterSessions && window.PuterSessions.note("assistant", full);
-      } else {
-        const finalText = M().extractText(last);
-        addMsg("assistant", md(finalText), finalText);
       }
+      if (activeGen !== gen) return true; // superseded by a newer send
+      if (stopFlag) { timeline("stopped."); return true; }
+      // Streamed final answer after tool rounds
+      timeline("writing final answer…");
+      await runStreamed(working, base, streamOn);
+      return true;
     } catch (e) {
-      addMsg("assistant", window.PuterUI.errorCard(e, (typeof base !== "undefined" && base.model) || el("modelSelect").value));
+      if (activeGen !== gen) return true; // stale send, stay silent
+      addMsg("assistant", window.PuterUI.errorCard(e, base.model));
       window.PuterUI.toast("Request failed — see error card", "err");
+      return true;
     } finally {
-      el("btnStop").disabled = true;
+      if (stopBtn) stopBtn.disabled = true;
+      if (my === gen) setBusy(false);
     }
   }
 
+  function ctxHooks() {
+    return {
+      onImage: (img, p) => {
+        img.style.maxWidth = "100%";
+        const b = addMsg("assistant", `<p><b>🎨 ${escapeHtml(p || "")}</b></p>`, "[image] " + (p || ""));
+        b.appendChild(img);
+        window.PuterUI.toast("Image ready", "ok");
+      },
+      onAudio: (a) => {
+        const o = document.getElementById("ttsOut");
+        if (o) { o.innerHTML = ""; a.setAttribute("controls", ""); o.appendChild(a); }
+        else {
+          const b = addMsg("assistant", "<p>🔊 <i>audio</i></p>", "[audio]");
+          b.appendChild(a);
+        }
+        a.setAttribute("controls", "");
+        a.play().catch(() => {});
+        window.PuterUI.toast("Playing audio", "ok");
+      },
+      onPreview: (html, title, path) => {
+        if (path && window.PuterCodebase) window.PuterCodebase.put(path, html);
+        window.PuterSandbox.render(html, title);
+        if (window.PuterDock) window.PuterDock.open("preview");
+        window.PuterUI.toast("Preview opened", "ok");
+      },
+    };
+  }
+
   function toAssistantMsg(resp) {
-    // Keep provider message verbatim when possible so tool_ids line up.
     if (resp && resp.message && resp.message.role) return resp.message;
     return { role: "assistant", content: M().extractText(resp) };
   }
 
-  async function streamOrNot(promptOrMsgs, mediaPayload, base, stream) {
-    const body = addMsg("assistant", "", "");
-    body.classList.add("streaming");
-    const done = () => body.classList.remove("streaming");
-    if (stream) {
-      try {
-        const call = mediaPayload
-          ? puter.ai.chat(typeof promptOrMsgs === "string" ? promptOrMsgs : M().extractText({ message: { content: "[vision]" } }), mediaPayload, false, { ...base, stream: true })
-          : puter.ai.chat(promptOrMsgs, { ...base, stream: true });
-        const resp = await call;
-        if (resp && typeof resp[Symbol.asyncIterator] === "function") {
-          let full = "";
-          for await (const part of resp) {
-            if (stopFlag) break;
-            const t = part && (part.text != null ? part.text : part?.reasoning);
-            if (t) { full += t; body.innerHTML = md(full); }
-          }
-          window.PuterSessions && window.PuterSessions.note("assistant", full);
-          done();
-          return body;
-        }
-      } catch (e) {
-        body.innerHTML = `<b>Stream failed, retrying non-stream:</b> ${escapeHtml(e.message || e)}`;
-      }
+  function finish(finalText, think, usage, finishReason) {
+    let html = md(finalText);
+    if (finishReason === "length") {
+      html += `<div class="err-card" style="margin-top:8px"><p><b>Output hit the model's limit</b> — say "continue" and I'll pick up where I stopped.</p></div>`;
     }
-    const resp = mediaPayload
-      ? await puter.ai.chat(typeof promptOrMsgs === "string" ? promptOrMsgs : "Describe this.", mediaPayload, false, base)
-      : await puter.ai.chat(promptOrMsgs, base);
-    const text = M().extractText(resp);
-    body.innerHTML = md(text);
-    window.PuterSessions && window.PuterSessions.note("assistant", text);
-    done();
-    return body;
+    html += tokFooter(usage, finalText);
+    const body = addMsg("assistant", html, finalText, think || null);
+    void body;
+    learnLast(finalText);
   }
 
-  window.PuterAgent = { send, stop, timeline, addMsg, opts, escapeHtml, md };
+  /** Single-turn call (vision / simple), with think + usage handling. */
+  async function runSingle(prompt, mediaPayload, base, streamOn) {
+    const t0 = performance.now();
+    const msgEl = addMsg("assistant", "", "").parentElement;
+    const body = msgEl.querySelector(".body");
+    body.classList.add("streaming");
+    let think = "", full = "", usage = null;
+    const renderAll = (done) => {
+      paintThink(msgEl, think, t0, done);
+      body.innerHTML = md(full) + (done ? tokFooter(usage, full) : "");
+    };
+    if (streamOn) {
+      try {
+        const resp = await puter.ai.chat(prompt, mediaPayload, false, { ...base, stream: true });
+        if (resp && typeof resp[Symbol.asyncIterator] === "function") {
+          for await (const part of resp) {
+            if (stopFlag || activeGen !== gen) break;
+            if (!part) continue;
+            if (part.type === "error") throw new Error(part.message || "stream error");
+            if (part.type === "reasoning" && part.reasoning) { think += part.reasoning; renderAll(false); }
+            else if (part.text) { full += part.text; renderAll(false); }
+            else if (part.reasoning) { think += part.reasoning; renderAll(false); }
+            if (part.type === "usage" && part.usage) usage = TK().readUsage({ usage: part.usage });
+          }
+          body.classList.remove("streaming");
+          renderAll(true);
+          meter(TK().est(prompt) + TK().est(full) + TK().est(think), !!usage, M().contextWindow(base.model).size);
+          history.push({ role: "user", content: prompt }, { role: "assistant", content: full });
+          if (window.PuterSessions) window.PuterSessions.note("assistant", full, think || null);
+          learnLast(full);
+          return;
+        }
+      } catch (e) {
+        if (!full) throw e;
+      }
+    }
+    const resp = await puter.ai.chat(prompt, mediaPayload, false, base);
+    full = M().extractText(resp);
+    think = (resp && resp.message && resp.message.reasoning) || "";
+    usage = TK().readUsage(resp);
+    body.classList.remove("streaming");
+    renderAll(true);
+    meter(TK().est(prompt) + TK().est(full), !!usage, M().contextWindow(base.model).size);
+    history.push({ role: "user", content: prompt }, { role: "assistant", content: full });
+    if (window.PuterSessions) window.PuterSessions.note("assistant", full, think || null);
+          learnLast(full);
+  }
+
+  /** Streamed final answer after tool rounds; collects think + usage + compaction. */
+  async function runStreamed(working, base, streamOn) {
+    const t0 = performance.now();
+    const msgEl = addMsg("assistant", "", "").parentElement;
+    const body = msgEl.querySelector(".body");
+    body.classList.add("streaming");
+    let think = "", full = "", usage = null;
+    const renderAll = (done) => {
+      paintThink(msgEl, think, t0, done);
+      body.innerHTML = md(full) + (done ? tokFooter(usage, full) : "");
+    };
+    if (streamOn) {
+      try {
+        const resp = await puter.ai.chat(working, { ...base, stream: true });
+        if (resp && typeof resp[Symbol.asyncIterator] === "function") {
+          for await (const part of resp) {
+            if (stopFlag || activeGen !== gen) break;
+            if (!part) continue;
+            if (part.type === "error") throw new Error(part.message || "stream error");
+            if (part.type === "reasoning" && part.reasoning) { think += part.reasoning; renderAll(false); }
+            else if (part.text) { full += part.text; renderAll(false); }
+            else if (part.reasoning) { think += part.reasoning; renderAll(false); }
+            if (part.type === "usage" && part.usage) usage = TK().readUsage({ usage: part.usage });
+            if (part.type === "compaction" && part.id) {
+              pendingCompaction = { artifact: { type: "compaction", id: part.id, encrypted_content: part.encrypted_content }, text: full };
+            }
+          }
+          body.classList.remove("streaming");
+          renderAll(true);
+          working.push({ role: "assistant", content: full });
+          history = working.filter((m) => m.role !== "system");
+          if (window.PuterSessions) window.PuterSessions.note("assistant", full, think || null);
+          learnLast(full);
+          meter(TK().estMessages(working), !!usage, M().contextWindow(base.model).size);
+          return;
+        }
+      } catch (e) {
+        if (!full) throw e;
+      }
+    }
+    const resp = await puter.ai.chat(working, base);
+    full = M().extractText(resp);
+    think = (resp && resp.message && resp.message.reasoning) || "";
+    usage = TK().readUsage(resp);
+    if (resp && resp.compaction) pendingCompaction = { artifact: resp.compaction, text: full };
+    body.classList.remove("streaming");
+    renderAll(true);
+    working.push({ role: "assistant", content: full });
+    history = working.filter((m) => m.role !== "system");
+    if (window.PuterSessions) window.PuterSessions.note("assistant", full, think || null);
+          learnLast(full);
+    meter(TK().estMessages(working), !!usage, M().contextWindow(base.model).size);
+  }
+
+  window.PuterAgent = {
+    send, stop, timeline, addMsg, opts, escapeHtml, md,
+    isBusy, setBusyHandler,
+    getHistory: () => history,
+    clearHistory: () => { history = []; pendingCompaction = null; ledger = []; lastTurn = null; },
+    compactHistory,
+  };
 })();

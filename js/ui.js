@@ -10,7 +10,34 @@
     setTimeout(() => { d.classList.add("out"); setTimeout(() => d.remove(), 320); }, 4200);
   }
 
-  /** Styled async confirm. Resolves true/false. */
+  /** Multi-choice modal. Resolves the index of the clicked button (or -1 on dismiss). */
+  function chooseModal(title, bodyText, buttons) {
+    return new Promise((resolve) => {
+      const wrap = document.getElementById("modalWrap");
+      document.getElementById("modalTitle").textContent = title;
+      document.getElementById("modalBody").textContent = bodyText;
+      const btnRow = wrap.querySelector(".modal-btns");
+      const old = btnRow.innerHTML;
+      btnRow.innerHTML = "";
+      const done = (v) => {
+        btnRow.innerHTML = old;
+        document.getElementById("modalOk").onclick = null;
+        document.getElementById("modalCancel").onclick = null;
+        wrap.onclick = null;
+        wrap.classList.add("hidden");
+        resolve(v);
+      };
+      (buttons || ["OK"]).forEach((label, i) => {
+        const b = document.createElement("button");
+        b.className = "btn" + (i === 0 ? " primary" : " ghost");
+        b.textContent = label;
+        b.onclick = () => done(i);
+        btnRow.appendChild(b);
+      });
+      wrap.classList.remove("hidden");
+      wrap.onclick = (e) => { if (e.target === wrap) done(-1); };
+    });
+  }
   function confirmModal(title, bodyText, okLabel) {
     return new Promise((resolve) => {
       const wrap = document.getElementById("modalWrap");
@@ -45,7 +72,8 @@
         <p>Puter routed this request to a paid provider and the available balance couldn't cover it.
         Premium models (Astra Pro, Opus) burn allowance fast.</p>
         <p><b>Fix now:</b> switch to a cheap model — <b>gpt-5.4-nano</b>, <b>gpt-5.6-luna</b> or
-        <b>claude-haiku-4-5</b> — and retry. Check your allowance in the sidebar usage box.</p>
+        <b>claude-haiku-4-5</b> — and retry. Check your allowance in the account menu.</p>
+        <p><button id="retryCheap" class="btn primary sm">⚡ Retry with gpt-5.4-nano</button></p>
         <p class="muted">Details: ${esc(raw.slice(0, 300))}</p></div>`;
     }
     if (isAuth) {
@@ -58,5 +86,5 @@
       <p class="muted">Tip: retry once; if it persists, try another model (some vendors have outages).</p></div>`;
   }
 
-  window.PuterUI = { toast, confirmModal, errorCard, esc };
+  window.PuterUI = { toast, confirmModal, chooseModal, errorCard, esc };
 })();

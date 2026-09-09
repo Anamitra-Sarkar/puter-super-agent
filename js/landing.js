@@ -25,11 +25,11 @@
   window.addEventListener("DOMContentLoaded", () => {
     refreshCTA();
     if (el("ctaBtn")) el("ctaBtn").onclick = async () => {
-      if (await window.PuterAuth.signIn()) location.href = "app.html";
+      if (await window.PuterAuth.signIn()) location.href = "app/";
       else refreshCTA();
     };
     if (el("ctaBtn2")) el("ctaBtn2").onclick = () => el("ctaBtn").click();
-    if (el("openAppBtn")) el("openAppBtn").onclick = () => (location.href = "app.html");
+    if (el("openAppBtn")) el("openAppBtn").onclick = () => (location.href = "app/");
     if (el("btnLandingOut")) el("btnLandingOut").onclick = async () => {
       await window.PuterAuth.signOut();
       refreshCTA();

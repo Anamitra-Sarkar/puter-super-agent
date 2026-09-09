@@ -6,7 +6,7 @@ no API keys, users cover their own usage via their Puter account.
 ## Pages
 
 - `index.html` — public **landing page** (hero, features, FAQ, sign-in CTA)
-- `app.html` — the **app** (sign-in required): chat-first UI, `/` commands,
+- `app/` (`app/index.html`) — the **app** (sign-in required): chat-first UI, `/` commands,
   model library, live preview, Studio drawer (vision/voice/files/browser/deploy)
 
 ## Run locally (HTTP required — not file://)
@@ -14,7 +14,7 @@ no API keys, users cover their own usage via their Puter account.
 ```bash
 cd puter-ai-chat-app
 python3 -m http.server 8080
-# landing: http://localhost:8080/   app: http://localhost:8080/app.html
+# landing: http://localhost:8080/   app: http://localhost:8080/app/
 ```
 
 Alternative: `npx serve .` (serve is installed on this machine).

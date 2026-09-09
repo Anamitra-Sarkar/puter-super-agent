@@ -61,6 +61,18 @@
   const DEFAULT_MODEL = "gpt-5.4-nano";
   function costOf(id) { return COST[id] || "$"; }
 
+  // Reasoning effort is OpenAI-only per Puter docs (Claude ignores it).
+  function supportsEffort(id) {
+    return /^(gpt-|openai\/)/i.test(id || "");
+  }
+  // Context windows: exact only where documented (astra 1.05M per OpenAI listing);
+  // everything else is a conservative estimate -> always displayed with "~".
+  const CONTEXT = { "gpt-6-astra": 1050000, "gpt-6-astra-pro": 1050000 };
+  const DEFAULT_WINDOW = 128000;
+  function contextWindow(id) {
+    return { size: CONTEXT[id] || DEFAULT_WINDOW, exact: !!CONTEXT[id] };
+  }
+
   function optionGroups() {
     return [
       { label: "OpenAI", ids: OPENAI_CHAT.map((x) => x[0]) },
@@ -104,5 +116,5 @@
     }
   }
 
-  window.PuterModels = { OPENAI_CHAT, CLAUDE, META, optionGroups, describe, extractText, toolCallsOf, liveModelIds, costOf, DEFAULT_MODEL };
+  window.PuterModels = { OPENAI_CHAT, CLAUDE, META, optionGroups, describe, extractText, toolCallsOf, liveModelIds, costOf, DEFAULT_MODEL, supportsEffort, contextWindow };
 })();

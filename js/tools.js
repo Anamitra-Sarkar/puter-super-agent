@@ -33,10 +33,38 @@
       type: "function",
       function: {
         name: "run_code_preview",
-        description: "Render HTML (optionally with inline JS/CSS) into the live sandbox preview panel so the user can SEE it. Pass full HTML document or snippet.",
-        parameters: { type: "object", properties: { html: { type: "string" }, title: { type: "string" } }, required: ["html"] },
+        description: "Render HTML (optionally with inline JS/CSS) into the live sandbox preview panel so the user can SEE it. Pass full HTML document or snippet. Optionally pass path (e.g. index.html) to also save it into the Code tab codebase.",
+        parameters: { type: "object", properties: { html: { type: "string" }, title: { type: "string" }, path: { type: "string" } }, required: ["html"] },
       },
       _kind: "write",
+    },
+    {
+      type: "function",
+      function: {
+        name: "memory_read",
+        description: "Read the persistent MEMORY.md notes from earlier work (also auto-injected into context).",
+        parameters: { type: "object", properties: {} },
+      },
+      _kind: "read",
+    },
+    {
+      type: "function",
+      function: {
+        name: "memory_write",
+        description: "Append an important fact to persistent MEMORY.md (decisions, file paths, credentials locations, things that must survive compaction). Keep it short.",
+        parameters: { type: "object", properties: { entry: { type: "string" } }, required: ["entry"] },
+      },
+      _kind: "write",
+    },
+    {
+      type: "function",
+      function: {
+        name: "get_secret",
+        description: "Read a named secret from the user's browser-local vault (Secrets tab) for verifying builds with real credentials. The user must approve each read. Never print secret values in chat.",
+        parameters: { type: "object", properties: { name: { type: "string" } }, required: ["name"] },
+      },
+      _kind: "write",
+      _ask: true,
     },
     {
       type: "function",
@@ -110,8 +138,13 @@
         return "Audio played in the Speech tab.";
       }
       case "run_code_preview": {
-        if (ctx && ctx.onPreview) ctx.onPreview(args.html, args.title);
-        return "Preview rendered in the sandbox panel.";
+        if (ctx && ctx.onPreview) ctx.onPreview(args.html, args.title, args.path);
+        return "Preview rendered in the sandbox panel." + (args.path ? " Saved to codebase as " + args.path + "." : "");
+      }
+      case "get_secret": {
+        const v = window.PuterSecrets ? window.PuterSecrets.get(args.name) : undefined;
+        if (v === undefined) return `No secret named "${args.name}". Ask the user to add it in the Secrets tab. Do NOT invent a value.`;
+        return `Secret "${args.name}" value:\n${v}\nUse it for verification calls; never print it in chat responses.`;
       }
       case "fs_list": {
         const items = await puter.fs.readdir(args.path || ".");
@@ -134,6 +167,14 @@
         const v = await puter.kv.get("agentmem_" + args.key);
         return v == null ? "(nothing stored)" : String(v);
       }
+      case "memory_read": {
+        const m = window.PuterMemory ? await window.PuterMemory.load() : "";
+        return m || "(MEMORY.md is empty)";
+      }
+      case "memory_write": {
+        if (window.PuterMemory) await window.PuterMemory.append(String(args.entry || "").slice(0, 500));
+        return "Recorded in MEMORY.md.";
+      }
       default:
         throw new Error("Unknown tool: " + name);
     }
@@ -144,6 +185,7 @@
     if (approvalMode === "plan") return true; // plan = dry-run everything
     const def = TOOLS.find((t) => t.function.name === toolName);
     if (!def) return true;
+    if (def._ask) return true; // sensitive tools always ask (e.g. secrets)
     return def._kind !== "read"; // auto: reads run, writes ask
   }
 

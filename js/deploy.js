@@ -3,12 +3,15 @@
   function el(id) { return document.getElementById(id); }
   function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
-  async function deploy() {
-    const out = el("deployOut");
-    const sub = el("deploySub").value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-    const dir = el("deployDir").value.trim() || "super-agent-site";
-    if (!sub) { out.textContent = "Enter a subdomain first."; return; }
-    out.textContent = "Deploying…";
+  async function deploy(subArg, dirArg, outEl) {
+    const out = outEl || el("deployOut");
+    const subRaw = subArg !== undefined && subArg !== null
+      ? subArg
+      : (document.getElementById("deploySub") || {}).value || "";
+    const sub = String(subRaw).trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    const dir = (dirArg || (document.getElementById("deployDir") || {}).value || "").trim() || "super-agent-site";
+    if (!sub) { if (out) out.textContent = "Enter a subdomain first."; return; }
+    if (out) out.textContent = "Deploying…";
     try {
       try { await puter.fs.mkdir(dir); } catch {}
       try { await puter.fs.mkdir(dir + "/__workers"); } catch {}
@@ -31,11 +34,14 @@
     } catch (e) { out.innerHTML = "<b>Deploy failed:</b> " + esc(e.message || e); window.PuterUI.toast("Deploy failed", "err"); }
   }
 
-  async function workerHealth() {
-    const out = el("deployOut");
-    const sub = el("deploySub").value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
-    if (!sub) { out.textContent = "Enter the deployed subdomain first."; return; }
-    out.textContent = "Checking worker…";
+  async function workerHealth(subArg) {
+    const out = el("deployOut") || document.getElementById("deployInlineOut");
+    const subRaw = subArg !== undefined && subArg !== null
+      ? subArg
+      : (document.getElementById("deploySub") || {}).value || "";
+    const sub = String(subRaw).trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
+    if (!sub) { if (out) out.textContent = "Enter the deployed subdomain first."; return; }
+    if (out) out.textContent = "Checking worker…";
     try {
       const r = await fetch(`https://${sub}.puter.site/__workers/api/health`);
       const body = (await r.text()).slice(0, 2000);

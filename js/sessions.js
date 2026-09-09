@@ -11,9 +11,9 @@
   }
   function mk(name) { return { id: "s" + Date.now().toString(36), name, turns: [], created: Date.now() }; }
   function save() { try { localStorage.setItem(KEY, JSON.stringify(sessions.slice(0, 30))); } catch {} }
-  function note(role, text) {
+  function note(role, text, think) {
     if (!current) return;
-    current.turns.push({ role, text: String(text).slice(0, 4000), at: Date.now() });
+    current.turns.push({ role, text: String(text).slice(0, 4000), think: think ? String(think).slice(0, 8000) : null, at: Date.now() });
     if (current.turns.length === 2 && role === "assistant") {
       const first = current.turns.find((t) => t.role === "user");
       if (first) current.name = first.text.slice(0, 42);
@@ -27,7 +27,13 @@
     document.getElementById("timeline").innerHTML = "";
     const h = document.getElementById("emptyState");
     if (h) h.classList.remove("bye");
+    if (window.PuterAgent) window.PuterAgent.clearHistory();
+    if (window.PuterMeter) window.PuterMeter.reset();
     save(); render();
+  }
+  function thinkHTML(t) {
+    if (!t || !t.think) return "";
+    return `<div class="think"><button class="think-head">💭 Thought · ~${Math.ceil(t.think.length / 4)} tokens <span class="chev">⌄</span></button><div class="think-body">${t.think.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</div></div>`;
   }
   function open(id) {
     const s = sessions.find((x) => x.id === id);
@@ -35,9 +41,18 @@
     current = s;
     const log = document.getElementById("chatLog");
     log.innerHTML = "";
-    for (const t of s.turns) window.PuterAgent.addMsg(t.role === "user" ? "user" : "assistant", window.PuterAgent.md(t.text), "__skip__");
+    const hero = document.getElementById("emptyState");
+    if (hero && s.turns.length) hero.classList.add("bye");
+    for (const t of s.turns) window.PuterAgent.addMsg(t.role === "user" ? "user" : "assistant", thinkHTML(t) + window.PuterAgent.md(t.text), "__skip__");
     // remove the duplicate notes just added
     current.turns = s.turns;
+    if (window.PuterAgent) {
+      window.PuterAgent.clearHistory();
+      const hist = window.PuterAgent.getHistory();
+      for (const t of s.turns.slice(-20)) {
+        if (t.role === "user" || t.role === "assistant") hist.push({ role: t.role, content: t.text });
+      }
+    }
     render();
   }
   function render() {
@@ -61,7 +76,8 @@
   // guard: addMsg calls note(); skip re-note on restore
   const _note = note;
   window.PuterSessions = {
-    note(role, text) { if (text === "__skip__") return; _note(role, text); },
+    note(role, text, think) { if (text === "__skip__") return; _note(role, text, think || null); },
     newSession, export: exp, load,
+    getTurns() { return current ? current.turns : []; },
   };
 })();

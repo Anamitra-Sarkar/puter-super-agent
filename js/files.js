@@ -56,20 +56,29 @@
     } catch (e) { out.innerHTML = "<b>Error:</b> " + esc(e.message || e); window.PuterUI.toast("Image failed — see panel", "err"); }
   }
 
-  async function doFetch(summarize) {
-    const out = el("browserOut"); out.textContent = "Fetching…";
-    const url = el("browserUrl").value.trim();
+  async function doFetch(urlArg, summarize) {
+    const url = String(urlArg || (document.getElementById("browserUrl") || {}).value || "").trim();
+    if (!url) { (window.PuterUI ? window.PuterUI.toast("Usage: /browse <url>", "err") : null); return; }
+    const A = window.PuterAgent;
+    A.timeline("🌐 fetching…");
     try {
       const r = await puter.net.fetch(url);
       const text = (await r.text()).replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").slice(0, 8000);
-      if (!summarize) { out.textContent = text.slice(0, 4000); return; }
-      out.textContent = "Summarizing…";
+      if (!summarize) {
+        A.addMsg("assistant", `<b>🌐 ${url.replace(/</g, "&lt;")}</b><pre>${text.slice(0, 4000).replace(/</g, "&lt;")}</pre>`, "[fetch] " + url);
+        return;
+      }
+      A.timeline("summarizing…");
+      const model = (document.getElementById("modelSelect") || {}).value || "gpt-5.4-nano";
       const resp = await puter.ai.chat(
         [{ role: "system", content: "Summarize the fetched page content concisely with key points." },
          { role: "user", content: `URL: ${url}\n\nContent:\n${text}` }],
-        { model: el("modelSelect").value, normalize: true });
-      out.innerHTML = window.PuterAgent.md(window.PuterModels.extractText(resp));
-    } catch (e) { out.innerHTML = "<b>Error:</b> " + esc(e.message || e); }
+        { model, normalize: true });
+      const t = window.PuterModels.extractText(resp);
+      A.addMsg("assistant", `<b>🌐 ${url.replace(/</g, "&lt;")}</b>` + A.md(t), t);
+    } catch (e) {
+      A.addMsg("assistant", window.PuterUI.errorCard(e, "browser"));
+    }
   }
 
   async function fsList() {
