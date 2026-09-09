@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Puter Super-Agent — OpenAI + Claude Chat</title>
+<script src="https://js.puter.com/v2/"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="app">
+  <aside id="sidebar">
+    <div class="brand">⚡ Puter Super-Agent</div>
+    <div class="side-section">
+      <label class="side-label">Auth</label>
+      <div id="authBox" class="auth-box">Checking sign-in…</div>
+      <div class="row">
+        <button id="btnSignIn" class="btn small">Sign in</button>
+        <button id="btnSignOut" class="btn small ghost">Sign out</button>
+      </div>
+    </div>
+    <div class="side-section">
+      <label class="side-label" for="modelSelect">Model (all free via Puter)</label>
+      <select id="modelSelect"></select>
+      <div id="modelMeta" class="model-meta"></div>
+      <div class="row">
+        <button id="btnRefreshModels" class="btn small ghost" title="Refresh live model list from Puter">↻ live list</button>
+      </div>
+    </div>
+    <div class="side-section grid2">
+      <div><label class="side-label">Temperature <span id="tempVal">0.7</span></label>
+        <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" /></div>
+      <div><label class="side-label">Max tokens</label>
+        <input id="maxTokens" type="number" min="1" max="128000" placeholder="default" /></div>
+    </div>
+    <div class="side-section grid2">
+      <div><label class="side-label">Mode</label>
+        <select id="agentMode">
+          <option value="chat">Chat</option>
+          <option value="agent" selected>Agent + tools</option>
+          <option value="compare">Swarm compare</option>
+          <option value="pipeline">Swarm pipeline</option>
+        </select></div>
+      <div><label class="side-label">Approval</label>
+        <select id="approvalMode">
+          <option value="plan">Plan (dry-run)</option>
+          <option value="auto" selected>Auto (read auto, writes ask)</option>
+          <option value="yolo">Yolo (ask once)</option>
+        </select></div>
+    </div>
+    <div class="side-section">
+      <label class="side-label">Toggles</label>
+      <label class="chk"><input type="checkbox" id="streamToggle" checked /> Stream responses</label>
+      <label class="chk"><input type="checkbox" id="webSearchToggle" /> Web search (OpenAI models)</label>
+      <label class="chk"><input type="checkbox" id="swarmSynth" checked /> Synthesize swarm answers</label>
+    </div>
+    <div class="side-section">
+      <label class="side-label">System prompt / skill</label>
+      <select id="skillSelect">
+        <option value="">General assistant</option>
+        <option value="coder">Coder (codex-style)</option>
+        <option value="researcher">Researcher (web-first)</option>
+        <option value="writer">Writer</option>
+        <option value="reviewer">Critic / reviewer</option>
+      </select>
+      <textarea id="systemPrompt" rows="3" placeholder="Optional system instruction…"></textarea>
+    </div>
+    <div class="side-section">
+      <label class="side-label">Sessions</label>
+      <div class="row">
+        <button id="btnNewChat" class="btn small">+ New</button>
+        <button id="btnExportSession" class="btn small ghost">Export</button>
+      </div>
+      <div id="sessionList" class="session-list"></div>
+    </div>
+    <div class="side-foot">Powered by <a href="https://developer.puter.com" target="_blank" rel="noopener">Puter</a> · User-Pays, no API keys</div>
+  </aside>
+
+  <main id="main">
+    <nav id="tabs">
+      <button data-tab="chat" class="tab active">Chat</button>
+      <button data-tab="swarm" class="tab">Swarm</button>
+      <button data-tab="image" class="tab">Image</button>
+      <button data-tab="vision" class="tab">Vision</button>
+      <button data-tab="speech" class="tab">Speech</button>
+      <button data-tab="files" class="tab">Files</button>
+      <button data-tab="browser" class="tab">Browser</button>
+      <button data-tab="deploy" class="tab">Deploy</button>
+    </nav>
+
+    <section id="tab-chat" class="panel active">
+      <div id="timeline" class="timeline"></div>
+      <div id="chatLog" class="chat-log"></div>
+      <div class="composer">
+        <div class="attach-row">
+          <input type="file" id="fileInput" multiple />
+          <span id="attachHint" class="hint">images → vision · txt/md/pdf → context</span>
+        </div>
+        <div class="composer-row">
+          <textarea id="userInput" rows="3" placeholder="Ask anything… (Enter to send, Shift+Enter newline)"></textarea>
+          <div class="composer-btns">
+            <button id="btnSend" class="btn primary">Send</button>
+            <button id="btnStop" class="btn ghost" disabled>Stop</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="tab-swarm" class="panel">
+      <h2>Swarm compare &amp; pipeline</h2>
+      <p class="muted">Compare swarm fans out to up to 4 models in parallel. Pipeline runs Planner → Builder → Critic.</p>
+      <div class="row wrap">
+        <label class="chk"><input type="checkbox" class="swarm-model" value="gpt-5.6-sol" checked /> gpt-5.6-sol</label>
+        <label class="chk"><input type="checkbox" class="swarm-model" value="claude-sonnet-5" checked /> claude-sonnet-5</label>
+        <label class="chk"><input type="checkbox" class="swarm-model" value="gpt-6-astra" checked /> gpt-6-astra</label>
+        <label class="chk"><input type="checkbox" class="swarm-model" value="claude-fable-5-1" /> claude-fable-5-1</label>
+      </div>
+      <div class="row">
+        <input id="swarmPrompt" placeholder="Swarm prompt…" />
+        <button id="btnSwarmGo" class="btn primary">Run compare</button>
+        <button id="btnPipelineGo" class="btn">Run pipeline</button>
+      </div>
+      <div class="row">
+        <label class="side-label">Aggregator</label>
+        <select id="aggregatorModel"><option value="gpt-5.6-luna">gpt-5.6-luna (cheap)</option></select>
+      </div>
+      <div id="swarmCards" class="swarm-cards"></div>
+      <div id="swarmResult" class="swarm-result"></div>
+    </section>
+
+    <section id="tab-image" class="panel">
+      <h2>Image generation (GPT Image)</h2>
+      <div class="row">
+        <input id="imgPrompt" placeholder="A futuristic cityscape at night…" />
+        <select id="imgModel">
+          <option value="gpt-image-2">gpt-image-2</option>
+          <option value="gpt-image-1.5">gpt-image-1.5</option>
+          <option value="gpt-image-1-mini" selected>gpt-image-1-mini (default/cheap)</option>
+          <option value="gpt-image-1">gpt-image-1</option>
+        </select>
+        <select id="imgQuality"><option value="low" selected>low</option><option value="medium">medium</option><option value="high">high</option></select>
+        <button id="btnGenImg" class="btn primary">Generate</button>
+      </div>
+      <div id="imgOut" class="img-out"></div>
+    </section>
+
+    <section id="tab-vision" class="panel">
+      <h2>Vision analysis</h2>
+      <div class="row">
+        <input id="visionUrl" placeholder="Image URL (or pick a file below)" value="https://assets.puter.site/doge.jpeg" />
+        <input type="file" id="visionFile" accept="image/*" />
+        <button id="btnVision" class="btn primary">Analyze</button>
+      </div>
+      <div class="row"><input id="visionQ" placeholder="Question about the image…" value="What do you see in this image?" /></div>
+      <div id="visionOut" class="md"></div>
+    </section>
+
+    <section id="tab-speech" class="panel">
+      <h2>Text to speech (OpenAI via Puter)</h2>
+      <div class="row">
+        <select id="ttsModel"><option value="gpt-4o-mini-tts" selected>gpt-4o-mini-tts</option><option value="tts-1">tts-1</option><option value="tts-1-hd">tts-1-hd</option></select>
+        <select id="ttsVoice"><option value="alloy" selected>alloy</option><option value="echo">echo</option><option value="fable">fable</option><option value="nova">nova</option><option value="onyx">onyx</option><option value="shimmer">shimmer</option></select>
+        <button id="btnTTS" class="btn primary">Speak</button>
+      </div>
+      <textarea id="ttsText" rows="3">Hello world! This is OpenAI text-to-speech via Puter.js.</textarea>
+      <div id="ttsOut"></div>
+    </section>
+
+    <section id="tab-files" class="panel">
+      <h2>Puter cloud files</h2>
+      <div class="row">
+        <button id="btnFsList" class="btn">List AppData</button>
+        <input id="fsPath" placeholder="path e.g. notes/hello.txt" />
+        <button id="btnFsRead" class="btn">Read</button>
+        <button id="btnFsWrite" class="btn">Write prompt box</button>
+      </div>
+      <textarea id="fsBody" rows="6" placeholder="File contents…"></textarea>
+      <div id="fsOut" class="md"></div>
+    </section>
+
+    <section id="tab-browser" class="panel">
+      <h2>Browser (CORS-free fetch + preview)</h2>
+      <div class="row">
+        <input id="browserUrl" placeholder="https://example.com" value="https://example.com" />
+        <button id="btnFetch" class="btn">Fetch</button>
+        <button id="btnSummarize" class="btn primary">Fetch + summarize</button>
+      </div>
+      <div id="browserOut" class="md"></div>
+    </section>
+
+    <section id="tab-deploy" class="panel">
+      <h2>Self-deploy to Puter</h2>
+      <p class="muted">Creates a public <code>*.puter.site</code> from a folder in your Puter FS. The bundled <code>__workers/api.worker.js</code> rides along (dynamic worker).</p>
+      <div class="row">
+        <input id="deploySub" placeholder="subdomain e.g. my-super-agent" />
+        <input id="deployDir" placeholder="source dir (created on first deploy)" value="super-agent-site" />
+        <button id="btnDeploy" class="btn primary">Create / update site</button>
+        <button id="btnWorkerHealth" class="btn">Check worker /health</button>
+      </div>
+      <div id="deployOut" class="md"></div>
+    </section>
+
+    <section id="previewDock">
+      <div class="preview-head">
+        <strong>Live sandbox preview</strong>
+        <span class="muted">agent HTML/JS runs here visibly (Manus-style)</span>
+        <span class="spacer"></span>
+        <button id="btnPreviewFull" class="btn small ghost">Open fullscreen</button>
+        <button id="btnPreviewClear" class="btn small ghost">Clear</button>
+      </div>
+      <iframe id="previewFrame" sandbox="allow-scripts" title="sandbox preview"></iframe>
+      <pre id="previewLog" class="preview-log"></pre>
+    </section>
+  </main>
+</div>
+<script src="js/models.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/sandbox.js"></script>
+<script src="js/agent.js"></script>
+<script src="js/swarm.js"></script>
+<script src="js/files.js"></script>
+<script src="js/sessions.js"></script>
+<script src="js/deploy.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
