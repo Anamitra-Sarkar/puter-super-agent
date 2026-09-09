@@ -58,6 +58,18 @@
   function setActive(name) {
     if (files[name]) { active = name; render(); }
   }
+  function setEntry(name) {
+    if (!name || !files[name]) return;
+    try { localStorage.setItem("spa_entry", name); } catch {}
+  }
+  function getEntry() {
+    try {
+      const n = localStorage.getItem("spa_entry");
+      if (n && files[n]) return n;
+    } catch {}
+    const htmls = names().filter((n) => /\.html?$/i.test(n));
+    return htmls[0] || null;
+  }
   function clear() { files = {}; active = null; save(); render(); }
   function askedInline(userText) {
     return /(show|print|display|write|paste|give|transcribe|extract|copy|type|list).{0,30}(code|here|inline|in (the )?chat|full|all|command)/i.test(userText || "");
@@ -91,12 +103,41 @@
   function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
+  function renderPreviewSel() {
+    const sel = document.getElementById("previewFileSel");
+    if (!sel) return;
+    const htmls = names().filter((n) => /\.html?$/i.test(n));
+    const cur = getEntry();
+    sel.innerHTML = "";
+    if (!htmls.length) {
+      const o = document.createElement("option");
+      o.value = ""; o.textContent = "(no HTML files yet)";
+      sel.appendChild(o);
+      return;
+    }
+    for (const n of htmls) {
+      const o = document.createElement("option");
+      o.value = n;
+      o.textContent = (n === cur ? "● " : "") + n;
+      sel.appendChild(o);
+    }
+    sel.value = cur && htmls.includes(cur) ? cur : htmls[0];
+  }
   function render() {
+    renderPreviewSel();
     const tree = document.getElementById("codeTree");
     const view = document.getElementById("codeView");
     if (!tree || !view) return;
     const list = names();
     tree.innerHTML = "";
+    const total = list.reduce((n, k) => n + (files[k] ? files[k].content.length : 0), 0);
+    const head = document.createElement("div");
+    head.className = "muted small";
+    head.style.padding = "8px";
+    head.textContent = list.length
+      ? `${list.length} files · ~${window.PuterTokens.fmt(Math.ceil(total / 4))} tok of file sizes (enter context only when the agent reads them)`
+      : "";
+    tree.appendChild(head);
     if (!list.length) {
       tree.innerHTML = '<div class="muted small" style="padding:8px">No files yet — ask the AI to build, or upload with +</div>';
       view.innerHTML = "";
@@ -146,5 +187,5 @@
     view.append(bar, ta);
   }
   load();
-  window.PuterCodebase = { put, get, names, remove, clear, render, setActive, undo, extractCode, getActive: () => active };
+  window.PuterCodebase = { put, get, names, remove, clear, render, setActive, setEntry, getEntry, undo, extractCode, getActive: () => active };
 })();

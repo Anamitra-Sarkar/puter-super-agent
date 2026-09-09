@@ -48,7 +48,6 @@
       </div>
     </div>
     <div id="chatLog" class="chat-log"></div>
-    <div id="timeline" class="timeline"></div>
     <div class="composer" id="composer">
       <div id="palette" class="palette hidden"><div id="paletteList"></div></div>
       <div id="queueRow" class="queue-row hidden"><span class="muted small">Queued:</span><span id="queueList"></span></div>
@@ -83,6 +82,7 @@
         <button id="btnDockClose" class="btn sm ghost">✕</button>
       </div>
       <div id="dpane-preview" class="dock-pane active">
+        <div class="row"><select id="previewFileSel" title="Choose previewed file"></select></div>
         <div id="previewDock">
           <iframe id="previewFrame" sandbox="allow-scripts" title="sandbox preview"></iframe>
           <button id="btnPreviewExit" title="Exit fullscreen">✕</button>

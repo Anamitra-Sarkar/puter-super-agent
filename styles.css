@@ -134,6 +134,9 @@ input[type=range]{accent-color:var(--accent);width:100%}
 .err-card h4{margin:0 0 4px;color:var(--err)}
 .err-card p{margin:4px 0;font-size:13px}
 .timeline{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--ink2);margin-bottom:16px}
+.chat-log .t{align-self:center;font-size:12px;color:var(--muted);background:var(--surface);
+  border:1px dashed var(--line);border-radius:99px;padding:3px 13px;margin:2px 0;max-width:100%;
+  animation:msgIn .25s var(--ease);scroll-margin-bottom:150px;word-break:break-word}
 .timeline .t{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:6px 11px;
   animation:msgIn .25s var(--ease);scroll-margin-bottom:150px}
 .timeline:empty{display:none}
@@ -411,7 +414,7 @@ select{border-radius:12px}
 .think-slot{margin-bottom:8px}
 
 /* Right dock: flex sibling that PUSHES chat left (overlay on narrow screens) */
-.app-dock{display:flex;align-items:stretch}
+.app-dock{display:flex;align-items:stretch;padding-left:1cm}
 .app-dock #main{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center}
 .app-dock #main>*{width:100%;max-width:880px}
 .app-dock.starting #main{justify-content:flex-start;min-height:calc(100vh - 53px)}
@@ -419,12 +422,14 @@ select{border-radius:12px}
 .dock{position:sticky;top:53px;height:calc(100vh - 53px);width:0;min-width:0;opacity:0;overflow:hidden;
   background:var(--surface);border-left:1px solid transparent;z-index:40;display:flex;flex-direction:column;flex-shrink:0;
   transition:width .38s var(--ease),opacity .3s var(--ease),border-color .3s}
-.dock.open{width:60vw;max-width:60vw;opacity:1;border-left-color:var(--line);
+.dock.open{width:calc(60vw - 3cm);max-width:calc(60vw - 3cm);opacity:1;border-left-color:var(--line);
+  margin-left:2cm;margin-right:1cm;
   box-shadow:-20px 0 50px -20px rgba(28,25,23,.3)}
 .dock.open .dock-tabs,.dock.open .dock-pane{min-width:420px}
 @media(max-width:1100px){
+  .app-dock{padding-left:0}
   .dock{position:fixed;top:53px;right:0;bottom:0;height:auto}
-  .dock.open{width:min(620px,94vw);max-width:94vw}
+  .dock.open{width:min(620px,94vw);max-width:94vw;margin-left:0;margin-right:0}
 }
 #previewFrame:fullscreen{height:100%;border-radius:0}
 #btnPreviewExit{display:none;position:fixed;top:14px;right:14px;z-index:200;border-radius:50%!important;

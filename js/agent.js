@@ -14,6 +14,7 @@
   let pendingCompaction = null; // {artifact, text}
   let ledger = []; // task ledger: every attempted tool call {sig,name,args,ok,denied,note,at}
   let lastTurn = null; // {user, tools:[]} for MEMORY.md learning
+  let verifyFails = 0; // consecutive failing verify rounds this send (3 strikes → stop auto-fix)
   let thinkDelegateOn = false;
 
   function el(id) { return document.getElementById(id); }
@@ -117,19 +118,22 @@
   }
 
   function timeline(text) {
-    const t = el("timeline");
-    if (!t) return null;
+    // Activity rows live INSIDE the chat flow so they interleave chronologically
+    // with messages instead of floating in a detached strip.
+    const log = el("chatLog");
+    if (!log) return null;
     const d = document.createElement("div");
     d.className = "t";
     d.textContent = text;
-    t.appendChild(d);
-    while (t.children.length > 40) t.removeChild(t.firstChild);
-    t.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    log.appendChild(d);
+    while (log.querySelectorAll(":scope > .t").length > 60) {
+      const first = log.querySelector(":scope > .t");
+      if (first) first.remove();
+    }
+    log.scrollTop = log.scrollHeight;
     return d;
   }
   function clearTimeline() {
-    const t = el("timeline");
-    if (t) t.innerHTML = "";
     yoloApproved = false;
   }
   let yoloApproved = false;
@@ -164,8 +168,10 @@
   }
 
   function meter(usedEst, exact, win) {
-    if (window.PuterMeter) { try { window.PuterMeter.update(usedEst, win, exact); } catch {} }
+    // Pill shows CONTEXT fill (estimate). Breakdown (history/memory) rides along for the tooltip.
+    if (window.PuterMeter) { try { window.PuterMeter.update(usedEst, win, !!exact, ctxParts); } catch {} }
   }
+  let ctxParts = null; // {hist, mem} token estimates behind the current context total
   function present(fullText, userText) {
     const ex = window.PuterCodebase ? window.PuterCodebase.extractCode(fullText, userText) : { text: fullText, files: [] };
     if (ex.files.length) timeline("Saved " + ex.files.length + " code file(s) to the Code tab — open them from the cards below");
@@ -227,6 +233,7 @@
     const my = ++gen;
     const alive = () => !stopFlag && my === gen;
     activeGen = my;
+    verifyFails = 0;
     stopFlag = false;
     setBusy(true);
     const stopBtn = document.getElementById("btnStop");
@@ -263,7 +270,8 @@
       try {
         const mem = window.PuterMemory ? await window.PuterMemory.load() : "";
         if (mem) working.push({ role: "system", content: "[MEMORY.md — persistent notes from earlier work. Trust this over guesses; do not redo completed/failed items without a new approach.]\n" + mem.slice(0, 3000) });
-      } catch {}
+        ctxParts = { hist: TK().estMessages(history), mem: TK().est(mem) };
+      } catch { ctxParts = null; }
       if (pendingCompaction) {
         working.push({ role: "assistant", content: [pendingCompaction.artifact, { type: "text", text: pendingCompaction.text }] });
         pendingCompaction = null;
@@ -404,8 +412,17 @@
         window.PuterUI.toast("Playing audio", "ok");
       },
       onPreview: async (html, title, path) => {
-        if (path && window.PuterCodebase) window.PuterCodebase.put(path, html);
-        window.PuterSandbox.render(html, title);
+        const CB = window.PuterCodebase;
+        html = String(html || "");
+        // The MODEL chooses what to preview — we never substitute. Safety nets only:
+        // codebase.put() quarantines truncated overwrites, verify reports issues.
+        if (CB && path) {
+          CB.put(path, html);
+          CB.setEntry(path);
+        }
+        let note = path ? `Entry file: ${path}. ` : "";
+        if (window.PuterSessions) window.PuterSessions.setPreview({ file: CB ? CB.getEntry() : null, html: path ? null : html });
+        window.PuterSandbox.render(html, title || path || "preview");
         if (window.PuterDock) window.PuterDock.open("preview");
         window.PuterUI.toast("Preview opened — verifying…", "info");
         timeline("🔍 verifying build (console · responsive · clicks · security · design)…");
@@ -417,9 +434,22 @@
           report = "Verify harness error: " + (e.message || e);
         }
         const bad = /❌/.test(report);
-        timeline(bad ? "🔍 verify found issues — fixing…" : "🔍 verify: all checks green");
-        window.PuterUI.toast(bad ? "Issues found — agent is fixing" : "Build verified clean", bad ? "err" : "ok");
-        return "\n\n" + report;
+        if (bad) {
+          verifyFails++;
+          if (verifyFails >= 3) {
+            timeline("🔍 verify still failing after 3 fix rounds — stopping auto-fix, showing you the state");
+            window.PuterUI.toast("Verify stuck after 3 rounds — review needed", "err");
+            report += "\n\nSTOP: 3 consecutive verify rounds still show ❌. Do NOT call preview tools again this turn. Summarize honestly for the user: what works, what fails, and what input you need (or suggest they say 'keep fixing' for 3 more rounds).";
+          } else {
+            timeline(`🔍 verify found issues — fixing… (round ${verifyFails}/3)`);
+            window.PuterUI.toast("Issues found — agent is fixing", "err");
+          }
+        } else {
+          verifyFails = 0;
+          timeline("🔍 verify: all checks green");
+          window.PuterUI.toast("Build verified clean", "ok");
+        }
+        return "\n\n" + (note ? note + "\n" : "") + "Previewing: " + (title || path || "preview") + "\n" + report;
       },
     };
   }

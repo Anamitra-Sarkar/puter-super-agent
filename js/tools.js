@@ -33,7 +33,7 @@
       type: "function",
       function: {
         name: "run_code_preview",
-        description: "Render HTML (optionally with inline JS/CSS) into the live sandbox preview panel so the user can SEE it. Pass full HTML document or snippet. Optionally pass path (e.g. index.html) to also save it into the Code tab codebase. CRITICAL: always send the COMPLETE file content — never a partial/truncated file, never just the changed section. If output was cut off, say CONTINUE first and finish before previewing.",
+        description: "Render HTML into the live sandbox preview (YOU choose what to preview — full control). The preview is a REAL full-stack app environment: your JS can call window.PuterBackend.kv.get/set/del/list, .fs.read/write, and .ai.chat(prompt) — all promise-based, backed by real Puter KV/files/AI through a secure bridge. Example: const user = await PuterBackend.kv.get('user'). CRITICAL: always send the COMPLETE file content — never partial/truncated. Optionally pass path to save into the Code tab.",
         parameters: { type: "object", properties: { html: { type: "string" }, title: { type: "string" }, path: { type: "string" } }, required: ["html"] },
       },
       _kind: "write",
@@ -44,6 +44,15 @@
         name: "memory_read",
         description: "Read the persistent MEMORY.md notes from earlier work (also auto-injected into context).",
         parameters: { type: "object", properties: {} },
+      },
+      _kind: "read",
+    },
+    {
+      type: "function",
+      function: {
+        name: "read_code",
+        description: "Read files from the Code tab codebase INTO CONTEXT (or list them when path is omitted). ALWAYS use this instead of guessing at uploaded/built code — files do not sit in your context until you read them.",
+        parameters: { type: "object", properties: { path: { type: "string" } } },
       },
       _kind: "read",
     },
@@ -73,6 +82,22 @@
         },
       },
       _kind: "read",
+    },
+    {
+      type: "function",
+      function: {
+        name: "save_code_files",
+        description: "Save a MULTI-FILE app to the Code tab codebase: pass a map of path->COMPLETE file content (e.g. index.html, styles.css, app.js). Optionally set preview to the entry file to render it (verifies automatically). The previewed app is full-stack: its JS can use window.PuterBackend (kv/fs/ai) for real persistence and AI. Use this for any non-trivial build instead of one mono file. Every file must be complete, never truncated.",
+        parameters: {
+          type: "object",
+          properties: {
+            files: { type: "object", description: "path -> complete content" },
+            preview: { type: "string", description: "entry file to preview, e.g. index.html" },
+          },
+          required: ["files"],
+        },
+      },
+      _kind: "write",
     },
     {
       type: "function",
@@ -235,6 +260,23 @@
         if (ctx && ctx.onPreview) extra = await ctx.onPreview(args.html, args.title, args.path);
         return "Preview rendered in the sandbox panel." + (args.path ? " Saved to codebase as " + args.path + "." : "") + (extra || "");
       }
+      case "save_code_files": {
+        const map = (args && args.files) || {};
+        const names = Object.keys(map).slice(0, 40);
+        if (!names.length) throw new Error("files map was empty");
+        for (const n of names) {
+          if (window.PuterCodebase) window.PuterCodebase.put(n, String(map[n] == null ? "" : map[n]));
+        }
+        let extra = "";
+        if (args.preview && ctx && ctx.onPreview) {
+          const entry = names.includes(args.preview) ? args.preview : names[0];
+          const html = String(map[entry] || "");
+          extra = await ctx.onPreview(html, entry, entry);
+        } else if (window.PuterDock) {
+          window.PuterDock.open("code");
+        }
+        return `Saved ${names.length} files to the Code tab (${names.slice(0, 12).join(", ")}${names.length > 12 ? ", …" : ""}).` + (extra || "");
+      }
       case "get_secret": {
         const v = window.PuterSecrets ? window.PuterSecrets.get(args.name) : undefined;
         if (v === undefined) return `No secret named "${args.name}". Ask the user to add it in the Secrets tab. Do NOT invent a value.`;
@@ -297,6 +339,16 @@
       case "memory_read": {
         const m = window.PuterMemory ? await window.PuterMemory.load() : "";
         return m || "(MEMORY.md is empty)";
+      }
+      case "read_code": {
+        if (!window.PuterCodebase) return "(no codebase available)";
+        if (!args.path) {
+          const names = window.PuterCodebase.names();
+          return names.length ? "Codebase files (use read_code with a path to pull one into context):\n" + names.join("\n") : "(codebase is empty)";
+        }
+        const f = window.PuterCodebase.get(args.path);
+        if (!f) return `No file "${args.path}". Available: ${window.PuterCodebase.names().slice(0, 30).join(", ")}`;
+        return `--- ${args.path} (now in context) ---\n` + String(f.content).slice(0, 15000);
       }
       case "memory_write": {
         if (window.PuterMemory) await window.PuterMemory.append(String(args.entry || "").slice(0, 500));

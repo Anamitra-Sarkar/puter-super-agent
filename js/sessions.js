@@ -24,7 +24,8 @@
     current = mk("Session " + (sessions.length + 1));
     sessions.unshift(current);
     document.getElementById("chatLog").innerHTML = "";
-    document.getElementById("timeline").innerHTML = "";
+    const tl = document.getElementById("timeline");
+    if (tl) tl.innerHTML = "";
     const h = document.getElementById("emptyState");
     if (h) h.classList.remove("bye");
     const app = document.getElementById("app");
@@ -32,6 +33,12 @@
     if (window.PuterAgent) window.PuterAgent.clearHistory();
     if (window.PuterMeter) window.PuterMeter.reset();
     save(); render();
+  }
+  function setPreview(p) {
+    if (!current) return;
+    if (p && p.html && p.html.length > 100000) p = { file: p.file || null, html: null };
+    current.preview = p || null;
+    save();
   }
   function thinkHTML(t) {
     if (!t || !t.think) return "";
@@ -45,6 +52,8 @@
     log.innerHTML = "";
     const hero = document.getElementById("emptyState");
     if (hero && s.turns.length) hero.classList.add("bye");
+    const appEl = document.getElementById("app");
+    if (appEl) appEl.classList.toggle("starting", !s.turns.length);
     for (const t of s.turns) window.PuterAgent.addMsg(t.role === "user" ? "user" : "assistant", thinkHTML(t) + window.PuterAgent.md(t.text), "__skip__");
     // remove the duplicate notes just added
     current.turns = s.turns;
@@ -55,6 +64,20 @@
         if (t.role === "user" || t.role === "assistant") hist.push({ role: t.role, content: t.text });
       }
     }
+    // Restore the preview the user last saw (immediately visible, like they never left).
+    try {
+      const pv = s.preview;
+      const CB = window.PuterCodebase;
+      if (pv && CB) {
+        const f = pv.file && CB.get(pv.file);
+        const html = (f && f.content) || pv.html;
+        if (html) {
+          if (pv.file && f) CB.setEntry(pv.file);
+          window.PuterSandbox.render(html, pv.file || "preview");
+          if (window.PuterDock) window.PuterDock.open("preview");
+        }
+      }
+    } catch {}
     render();
   }
   function render() {
@@ -79,7 +102,7 @@
   const _note = note;
   window.PuterSessions = {
     note(role, text, think) { if (text === "__skip__") return; _note(role, text, think || null); },
-    newSession, export: exp, load,
+    newSession, export: exp, load, setPreview,
     getTurns() { return current ? current.turns : []; },
   };
 })();

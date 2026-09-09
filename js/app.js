@@ -7,14 +7,19 @@
   /* ---------- token meter ---------- */
   const Meter = {
     used: 0, win: 128000, exact: false,
-    update(used, win, exact) {
+    update(used, win, exact, parts) {
       this.used = used; this.win = win || this.win; this.exact = !!exact;
       const pct = Math.min(100, (used / this.win) * 100);
       el("tokenText").textContent = `◉ ~${window.PuterTokens.fmt(Math.round(used))} / ${window.PuterTokens.fmt(this.win)} · ${pct.toFixed(0)}%`;
       const fill = el("tokenFill");
       fill.style.width = pct + "%";
       const pill = el("tokenPill");
-      pill.title = "Context used incl. history (estimate). Exact per-reply counts sit under each answer.";
+      let tip = "Total context incl. history (estimate). Exact per-reply counts sit under each answer.";
+      if (parts && (parts.hist || parts.mem)) {
+        const rest = Math.max(0, Math.round(used - (parts.hist || 0) - (parts.mem || 0)));
+        tip = `Total context ~${window.PuterTokens.fmt(Math.round(used))} = history ~${window.PuterTokens.fmt(parts.hist || 0)} + memory ~${window.PuterTokens.fmt(parts.mem || 0)} + this turn ~${window.PuterTokens.fmt(rest)}. Codebase files are NOT counted until the agent reads them.`;
+      }
+      pill.title = tip;
       pill.classList.toggle("warn", pct >= 70 && pct < 90);
       pill.classList.toggle("crit", pct >= 90);
     },
@@ -404,6 +409,14 @@
     el("btnNewChat").onclick = () => { window.PuterSessions.newSession(); toast("New chat started", "info"); };
     el("btnExportSession").onclick = () => window.PuterSessions.export();
     el("btnPreviewClear").onclick = () => window.PuterSandbox.clear();
+    el("previewFileSel").onchange = (e) => {
+      const f = window.PuterCodebase.get(e.target.value);
+      if (!f) return;
+      window.PuterCodebase.setEntry(e.target.value);
+      window.PuterSandbox.render(f.content, e.target.value);
+      window.PuterCodebase.render();
+      if (window.PuterSessions) window.PuterSessions.setPreview({ file: e.target.value, html: null });
+    };
     el("btnPreviewFull").onclick = () => { const f = el("previewFrame"); if (f.requestFullscreen) f.requestFullscreen(); };
     el("btnPreviewExit").onclick = () => { if (document.exitFullscreen) document.exitFullscreen(); };
     document.addEventListener("fullscreenchange", () => {
