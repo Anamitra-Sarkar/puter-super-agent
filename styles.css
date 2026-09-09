@@ -133,9 +133,9 @@ input[type=range]{accent-color:var(--accent);width:100%}
 .err-card{background:var(--err-soft);border:1px solid #F3B4B4;border-radius:12px;padding:12px 14px;animation:msgIn .3s var(--ease)}
 .err-card h4{margin:0 0 4px;color:var(--err)}
 .err-card p{margin:4px 0;font-size:13px}
-.timeline{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--ink2)}
+.timeline{display:flex;flex-direction:column;gap:5px;font-size:12.5px;color:var(--ink2);margin-bottom:16px}
 .timeline .t{background:var(--surface);border:1px dashed var(--line);border-radius:10px;padding:6px 11px;
-  animation:msgIn .25s var(--ease)}
+  animation:msgIn .25s var(--ease);scroll-margin-bottom:150px}
 .timeline:empty{display:none}
 .dots::after{content:"";animation:dots 1.2s steps(4) infinite}
 @keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
