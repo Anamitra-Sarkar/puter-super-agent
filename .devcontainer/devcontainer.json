@@ -1,6 +1,11 @@
 {
   "name": "puter-super-agent",
   "image": "mcr.microsoft.com/devcontainers/python:3.11",
+  "features": {
+    "ghcr.io/devcontainers/features/sshd:1": {
+      "version": "latest"
+    }
+  },
   "postStartCommand": "nohup python3 -m http.server 8080 --directory /workspaces/puter-super-agent > /tmp/app-server.log 2>&1 &",
   "portsAttributes": {
     "8080": {
