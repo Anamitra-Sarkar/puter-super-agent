@@ -46,16 +46,22 @@
   /* ---------- dock ---------- */
   const Dock = {
     open(tab) {
-      el("dock").classList.remove("hidden");
+      const d = el("dock");
+      d.classList.remove("hidden");
+      requestAnimationFrame(() => requestAnimationFrame(() => d.classList.add("open")));
       if (tab) Dock.tab(tab);
       if (window.PuterCodebase) window.PuterCodebase.render();
       if (window.PuterSecrets) window.PuterSecrets.render();
       if (window.PuterMemory) window.PuterMemory.render();
     },
-    close() { el("dock").classList.add("hidden"); },
+    close() {
+      const d = el("dock");
+      d.classList.remove("open");
+      setTimeout(() => { if (!d.classList.contains("open")) d.classList.add("hidden"); }, 380);
+    },
     toggle(tab) {
       const d = el("dock");
-      if (d.classList.contains("hidden")) Dock.open(tab || "preview");
+      if (d.classList.contains("hidden") || !d.classList.contains("open")) Dock.open(tab || "preview");
       else if (tab) Dock.tab(tab);
       else Dock.close();
     },
@@ -402,6 +408,14 @@
         if (inp.value.trim()) sendCurrent(false);
         else toast("Switched to gpt-5.4-nano — type your message", "ok");
       }
+    });
+
+    // Open file cards from chat in the Code tab
+    document.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-open-code]");
+      if (!b) return;
+      if (window.PuterCodebase) window.PuterCodebase.setActive(b.dataset.openCode);
+      window.PuterDock.open("code");
     });
 
     window.PuterAgent.timeline("Ready — chat, or type / for commands.");

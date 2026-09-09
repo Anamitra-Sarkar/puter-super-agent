@@ -22,8 +22,11 @@ Reply in 6 bullets max: 3 biggest visual problems with concrete fixes, then a 1-
     const shim = `<script>try{const _l=(...a)=>parent.postMessage({__pvlog:a.map(String).join(" ")},"*");["log","warn","error"].forEach(k=>{const o=console[k].bind(console);console[k]=(...a)=>{o(...a);_l("["+k+"]",...a);};});window.onerror=(m)=>_l("[error]",m);}catch(e){}<\/script>`;
     frame.srcdoc = doc.replace(/<head[^>]*>/i, (m) => m + shim);
     if (log) log.textContent = `[preview] rendered${title ? ": " + title : ""} @ ${new Date().toLocaleTimeString()}\n` + log.textContent;
-    const dd = document.getElementById("previewDock");
-    if (dd && dd.scrollIntoView) dd.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    if (window.PuterDock) window.PuterDock.open("preview");
+    else {
+      const dd = document.getElementById("previewDock");
+      if (dd && dd.scrollIntoView) dd.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
   }
   function clear() {
     document.getElementById("previewFrame").removeAttribute("srcdoc");

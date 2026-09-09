@@ -64,6 +64,8 @@
     ensureThinkDelegate();
     const hero = document.getElementById("emptyState");
     if (hero) hero.classList.add("bye");
+    const app = document.getElementById("app");
+    if (app) app.classList.remove("starting");
     const log = el("chatLog");
     const d = document.createElement("div");
     d.className = "msg " + role;
@@ -157,6 +159,12 @@
   function meter(usedEst, exact, win) {
     if (window.PuterMeter) { try { window.PuterMeter.update(usedEst, win, exact); } catch {} }
   }
+  function present(fullText, userText) {
+    const ex = window.PuterCodebase ? window.PuterCodebase.extractCode(fullText, userText) : { text: fullText, files: [] };
+    if (ex.files.length) timeline("Saved " + ex.files.length + " code file(s) to the Code tab — open them from the cards below");
+    return ex.text;
+  }
+
   function tokFooter(usage, fallbackText) {
     if (usage) return `<div class="tok-foot">⚡ ${usage.in.toLocaleString()} in · ${usage.out.toLocaleString()} out</div>`;
     return `<div class="tok-foot">⚡ ~${TK().fmt(TK().est(fallbackText))} tokens</div>`;
@@ -412,12 +420,15 @@
   }
 
   function finish(finalText, think, usage, finishReason) {
-    let html = md(finalText);
+    const userText = lastTurn ? lastTurn.user : "";
+    const ex = window.PuterCodebase ? window.PuterCodebase.extractCode(finalText, userText) : { text: finalText, files: [] };
+    if (ex.files.length) timeline(`📁 saved ${ex.files.length} code file(s) to the Code tab — open them from the cards below`);
+    let html = md(ex.text);
     if (finishReason === "length") {
       html += `<div class="err-card" style="margin-top:8px"><p><b>Output hit the model's limit</b> — say "continue" and I'll pick up where I stopped.</p></div>`;
     }
     html += tokFooter(usage, finalText);
-    const body = addMsg("assistant", html, finalText, think || null);
+    const body = addMsg("assistant", html, ex.text, think || null);
     void body;
     learnLast(finalText);
   }
@@ -428,10 +439,10 @@
     const msgEl = addMsg("assistant", "", "").parentElement;
     const body = msgEl.querySelector(".body");
     body.classList.add("streaming");
-    let think = "", full = "", usage = null;
+    let think = "", full = "", usage = null, display = null;
     const renderAll = (done) => {
       paintThink(msgEl, think, t0, done);
-      body.innerHTML = md(full) + (done ? tokFooter(usage, full) : "");
+      body.innerHTML = md(done && display !== null ? display : full) + (done ? tokFooter(usage, full) : "");
     };
     if (streamOn) {
       try {
@@ -447,10 +458,11 @@
             if (part.type === "usage" && part.usage) usage = TK().readUsage({ usage: part.usage });
           }
           body.classList.remove("streaming");
+          display = present(full, prompt);
           renderAll(true);
           meter(TK().est(prompt) + TK().est(full) + TK().est(think), !!usage, M().contextWindow(base.model).size);
           history.push({ role: "user", content: prompt }, { role: "assistant", content: full });
-          if (window.PuterSessions) window.PuterSessions.note("assistant", full, think || null);
+          if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
           return;
         }
@@ -463,10 +475,11 @@
     think = (resp && resp.message && resp.message.reasoning) || "";
     usage = TK().readUsage(resp);
     body.classList.remove("streaming");
+    display = present(full, prompt);
     renderAll(true);
     meter(TK().est(prompt) + TK().est(full), !!usage, M().contextWindow(base.model).size);
     history.push({ role: "user", content: prompt }, { role: "assistant", content: full });
-    if (window.PuterSessions) window.PuterSessions.note("assistant", full, think || null);
+    if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
   }
 
@@ -476,10 +489,10 @@
     const msgEl = addMsg("assistant", "", "").parentElement;
     const body = msgEl.querySelector(".body");
     body.classList.add("streaming");
-    let think = "", full = "", usage = null;
+    let think = "", full = "", usage = null, display = null;
     const renderAll = (done) => {
       paintThink(msgEl, think, t0, done);
-      body.innerHTML = md(full) + (done ? tokFooter(usage, full) : "");
+      body.innerHTML = md(done && display !== null ? display : full) + (done ? tokFooter(usage, full) : "");
     };
     if (streamOn) {
       try {
@@ -498,10 +511,11 @@
             }
           }
           body.classList.remove("streaming");
+          display = present(full, lastTurn ? lastTurn.user : "");
           renderAll(true);
           working.push({ role: "assistant", content: full });
           history = working.filter((m) => m.role !== "system");
-          if (window.PuterSessions) window.PuterSessions.note("assistant", full, think || null);
+          if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
           meter(TK().estMessages(working), !!usage, M().contextWindow(base.model).size);
           return;
@@ -516,10 +530,11 @@
     usage = TK().readUsage(resp);
     if (resp && resp.compaction) pendingCompaction = { artifact: resp.compaction, text: full };
     body.classList.remove("streaming");
+    display = present(full, lastTurn ? lastTurn.user : "");
     renderAll(true);
     working.push({ role: "assistant", content: full });
     history = working.filter((m) => m.role !== "system");
-    if (window.PuterSessions) window.PuterSessions.note("assistant", full, think || null);
+    if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
     meter(TK().estMessages(working), !!usage, M().contextWindow(base.model).size);
   }

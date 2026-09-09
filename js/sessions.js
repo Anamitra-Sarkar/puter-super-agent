@@ -27,6 +27,8 @@
     document.getElementById("timeline").innerHTML = "";
     const h = document.getElementById("emptyState");
     if (h) h.classList.remove("bye");
+    const app = document.getElementById("app");
+    if (app) app.classList.add("starting");
     if (window.PuterAgent) window.PuterAgent.clearHistory();
     if (window.PuterMeter) window.PuterMeter.reset();
     save(); render();

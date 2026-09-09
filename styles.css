@@ -411,11 +411,23 @@ select{border-radius:12px}
 .think.open .think-body{max-height:420px;overflow:auto;padding:0 12px 10px}
 .think-slot{margin-bottom:8px}
 
-/* Right dock */
-.dock{position:fixed;top:53px;right:0;bottom:0;width:460px;max-width:94vw;background:var(--surface);
-  border-left:1px solid var(--line);z-index:65;display:flex;flex-direction:column;
-  box-shadow:-20px 0 50px -20px rgba(28,25,23,.35);animation:dockIn .32s var(--ease)}
-@keyframes dockIn{from{transform:translateX(60px);opacity:0}to{transform:none;opacity:1}}
+/* Right dock: flex sibling that PUSHES chat left (overlay on narrow screens) */
+.app-dock{display:flex;align-items:stretch}
+.app-dock #main{flex:1;min-width:0}
+.app-dock.starting #main{display:flex;flex-direction:column;justify-content:center;min-height:calc(100vh - 53px)}
+.app-dock.starting .composer{position:static}
+.dock{position:sticky;top:53px;height:calc(100vh - 53px);width:0;min-width:0;opacity:0;overflow:hidden;
+  background:var(--surface);border-left:1px solid transparent;z-index:40;display:flex;flex-direction:column;flex-shrink:0;
+  transition:width .38s var(--ease),opacity .3s var(--ease),border-color .3s}
+.dock.open{width:480px;max-width:46vw;opacity:1;border-left-color:var(--line);
+  box-shadow:-20px 0 50px -20px rgba(28,25,23,.3)}
+.dock.open .dock-tabs,.dock.open .dock-pane{min-width:360px}
+@media(max-width:1100px){
+  .dock{position:fixed;top:53px;right:0;bottom:0;height:auto}
+  .dock.open{width:min(460px,94vw);max-width:94vw}
+}
+.file-card{display:flex;gap:9px;align-items:center;background:var(--surface2);border:1px solid var(--line);
+  border-radius:14px;padding:9px 13px;margin:9px 0;font-size:13px;flex-wrap:wrap;animation:msgIn .3s var(--ease)}
 .dock-tabs{display:flex;gap:4px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}
 .dock-tab{background:none;border:none;padding:8px 12px;border-radius:10px;cursor:pointer;font:inherit;
   font-size:13px;font-weight:700;color:var(--muted)}
