@@ -97,9 +97,11 @@
     const custom = customEl ? customEl.value.trim() : "";
     let skilText = "";
     if (window.PuterSkills) {
-      const id = override || window.PuterSkills.selected();
-      const s = id && window.PuterSkills.get(id);
-      if (s) skilText = s.prompt;
+      const ids = override ? [override] : window.PuterSkills.selected();
+      skilText = ids
+        .map((id) => { const s = window.PuterSkills.get(id); return s ? `[Skill: ${s.name}]\n${s.prompt}` : ""; })
+        .filter(Boolean)
+        .join("\n\n");
     } else {
       const sel = document.getElementById("skillSelect");
       const s = override || (sel && sel.value) || "";

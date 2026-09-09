@@ -22,10 +22,29 @@
   function all() { return { ...BUILTINS, ...custom }; }
   function get(id) { return all()[id] || null; }
   function selected() {
-    try { return localStorage.getItem(SEL_KEY) || ""; } catch { return ""; }
+    // Multi-select: stored as JSON array; migrates legacy single string.
+    try {
+      const raw = localStorage.getItem(SEL_KEY);
+      if (!raw) return [];
+      if (raw.startsWith("[")) {
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr.filter((id) => all()[id]) : [];
+      }
+      return all()[raw] ? [raw] : [];
+    } catch { return []; }
   }
   function select(id) {
-    try { localStorage.setItem(SEL_KEY, id || ""); } catch {}
+    // Toggle one skill in the multi-set.
+    const cur = new Set(selected());
+    if (!id) { try { localStorage.setItem(SEL_KEY, "[]"); } catch {} renderList(); return; }
+    if (cur.has(id)) cur.delete(id);
+    else cur.add(id);
+    try { localStorage.setItem(SEL_KEY, JSON.stringify([...cur])); } catch {}
+    renderList();
+  }
+  function setSelected(ids) {
+    const valid = (Array.isArray(ids) ? ids : []).filter((id) => all()[id]);
+    try { localStorage.setItem(SEL_KEY, JSON.stringify(valid)); } catch {}
     renderList();
   }
   function upsert(id, name, prompt) {
@@ -38,40 +57,37 @@
   function remove(id) {
     if (BUILTINS[id]) return;
     delete custom[id];
-    if (selected() === id) select("");
+    setSelected(selected().filter((x) => x !== id));
     save(); renderList(); renderSelect();
   }
   function esc(s) {
     return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
   }
   function renderSelect() {
-    const sel = document.getElementById("skillSelect");
-    if (!sel) return;
-    const cur = selected();
-    sel.innerHTML = '<option value="">General assistant</option>';
-    for (const [id, s] of Object.entries(all())) {
-      const o = document.createElement("option");
-      o.value = id;
-      o.textContent = s.name + (s.builtin ? "" : " (custom)");
-      sel.appendChild(o);
-    }
-    sel.value = cur;
+    // No-op (multi-select lives in the skill list below). Kept for compat.
   }
   function renderList() {
     const box = document.getElementById("skillList");
     if (!box) return;
     box.innerHTML = "";
-    const cur = selected();
+    const cur = new Set(selected());
+    const head = document.createElement("div");
+    head.className = "muted small";
+    head.style.margin = "0 0 6px";
+    head.textContent = cur.size ? `${cur.size} active — all are injected together` : "None active (general assistant). Toggle several at once.";
+    box.appendChild(head);
     for (const [id, s] of Object.entries(all())) {
+      const on = cur.has(id);
       const d = document.createElement("div");
-      d.className = "skill-row" + (cur === id ? " active" : "");
+      d.className = "skill-row" + (on ? " active" : "");
       d.innerHTML = `<div><b>${esc(s.name)}</b> <span class="muted small">${s.builtin ? "built-in" : "custom"}</span>
         <div class="muted small">${esc(s.prompt.slice(0, 90))}${s.prompt.length > 90 ? "…" : ""}</div></div>
         <span class="spacer"></span>`;
       const use = document.createElement("button");
-      use.className = "btn sm" + (cur === id ? " primary" : "");
-      use.textContent = cur === id ? "✓ Active" : "Use";
-      use.onclick = () => { select(cur === id ? "" : id); renderSelect(); toast(); };
+      use.className = "btn sm" + (on ? " primary" : "");
+      use.textContent = on ? "✓ On" : "Off";
+      use.title = "Toggle (multiple can be on)";
+      use.onclick = () => { select(id); renderSelect(); note(); };
       d.appendChild(use);
       if (!s.builtin) {
         const ed = document.createElement("button");
@@ -88,8 +104,8 @@
       }
       box.appendChild(d);
     }
-    function toast() {
-      if (window.PuterUI) window.PuterUI.toast(cur === selected() ? "Skill deactivated" : "Skill activated", "info");
+    function note() {
+      if (window.PuterUI) window.PuterUI.toast("Skills updated (" + selected().length + " active)", "info");
     }
   }
   function saveFromInputs() {

@@ -456,6 +456,6 @@ select{border-radius:12px}
 .skill-row{display:flex;gap:8px;align-items:center;background:var(--surface2);border:1px solid var(--line-soft);
   border-radius:12px;padding:9px 11px;margin-bottom:7px;font-size:13px}
 .skill-row.active{border-color:var(--accent)}
-.modal-card.wide{width:560px}
+.modal-card.wide{width:min(680px,94vw);max-height:84vh;overflow-y:auto}
 .plan-btns{margin-top:10px;flex-wrap:wrap}
 #memoryView{font-family:ui-monospace,monospace;font-size:12.5px}

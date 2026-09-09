@@ -72,7 +72,9 @@
       </div>
     </div>
 
-    <aside id="dock" class="dock hidden">
+  </main>
+
+  <aside id="dock" class="dock hidden">
       <div class="dock-tabs">
         <button class="dock-tab active" data-dtab="preview">👁 Preview</button>
         <button class="dock-tab" data-dtab="code">&lt;/&gt; Code</button>
@@ -103,7 +105,6 @@
         <div class="row"><input id="secretName" placeholder="NAME e.g. STRIPE_KEY" /><input id="secretValue" type="password" placeholder="value" /><button id="btnSecretAdd" class="btn primary sm">Add</button></div>
       </div>
     </aside>
-  </main>
 </div>
 
 <div id="historyPanel" class="drawer hidden">
@@ -123,10 +124,8 @@
       <label class="chk"><input type="checkbox" id="streamToggle" checked /> Stream responses</label>
       <label class="chk"><input type="checkbox" id="webSearchToggle" /> Web search (OpenAI models)</label>
     </div>
-    <h3 style="margin-top:14px">🎯 Skills <span class="tag">customizable</span></h3>
-    <p class="muted small">Activate a skill to steer the AI — or create your own. Active skill is injected into every request.</p>
-    <label class="side-label">Active skill</label>
-    <select id="skillSelect"><option value="">General assistant</option></select>
+    <h3 style="margin-top:14px">🎯 Skills <span class="tag">toggle several</span></h3>
+    <p class="muted small">Toggle skills on/off — all active ones steer the AI together. Create your own below.</p>
     <div id="skillList"></div>
     <div class="row"><input id="skillId" placeholder="id e.g. sql-expert" /><input id="skillName" placeholder="Name" /></div>
     <div class="row"><input id="skillPrompt" placeholder="System prompt for this skill…" /></div>

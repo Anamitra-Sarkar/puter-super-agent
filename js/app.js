@@ -292,10 +292,7 @@
     };
 
     // Skills
-    el("skillSelect").onchange = (e) => {
-      window.PuterSkills.select(e.target.value);
-      toast(e.target.value ? "Skill active" : "Back to general assistant", "info");
-    };
+    // Skills (multi-toggle list renders itself)
     el("btnSkillSave").onclick = () => window.PuterSkills.saveFromInputs();
 
     // Codebase + secrets
