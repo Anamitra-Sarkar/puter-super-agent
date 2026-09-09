@@ -3,6 +3,8 @@
   function render(html, title) {
     const frame = document.getElementById("previewFrame");
     const log = document.getElementById("previewLog");
+    const dock = document.getElementById("previewDock");
+    if (dock) dock.classList.remove("hidden");
     const doc = String(html).includes("<html")
       ? String(html)
       : `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(title || "preview")}</title></head><body>${html}</body></html>`;
@@ -16,6 +18,8 @@
     document.getElementById("previewFrame").removeAttribute("srcdoc");
     document.getElementById("previewFrame").src = "about:blank";
     document.getElementById("previewLog").textContent = "";
+    const dock = document.getElementById("previewDock");
+    if (dock) dock.classList.add("hidden");
   }
   function escapeHtml(s) {
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

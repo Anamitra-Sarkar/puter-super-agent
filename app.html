@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>App — Puter Super-Agent</title>
+<script src="https://js.puter.com/v2/"></script>
+<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header id="topbar">
+  <a class="brand" href="index.html" style="text-decoration:none;color:inherit"><span class="brand-dot"></span><span>Super-Agent</span></a>
+  <button id="modelPill" class="model-pill" title="Choose model">🧠 <span id="modelPillLabel">…</span> ▾</button>
+  <span id="statusPill" class="pill">checking…</span>
+  <div class="top-right">
+    <button id="btnHistory" class="btn ghost sm" title="Chat history">🕘</button>
+    <button id="btnStudio" class="btn ghost sm" title="Studio: vision, voice, files, browser, deploy">🧪</button>
+    <button id="btnSettings" class="btn ghost sm" title="Settings">⚙️</button>
+    <div class="chip-wrap">
+      <button id="accountChip" class="account-chip"><span id="accountAvatar" class="avatar">?</span><span id="accountName">…</span> ▾</button>
+      <div id="accountMenu" class="menu hidden">
+        <div class="menu-head"><b id="accountName2">…</b><div id="accountUsage" class="muted small">Usage: —</div></div>
+        <button id="btnSignOut" class="btn ghost sm" style="width:100%">Sign out</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- hidden carriers keep the engine's defaults (no visible clutter) -->
+<select id="modelSelect" class="hidden" aria-hidden="true"></select>
+<input type="hidden" id="agentMode" value="agent" />
+<input type="checkbox" id="swarmSynth" class="hidden" checked aria-hidden="true" />
+<select id="aggregatorModel" class="hidden" aria-hidden="true"><option value="gpt-5.6-luna">gpt-5.6-luna</option></select>
+
+<div id="app" class="app-single">
+  <main id="main">
+    <div id="emptyState" class="hero slim">
+      <h1>What should we do?</h1>
+      <p class="muted">Chat normally — or type <code>/</code> for code, swarm, image, voice &amp; more.</p>
+      <div class="chips">
+        <button class="chip suggest" data-prompt="/code Build a landing page for a coffee brand">☕ /code a landing page</button>
+        <button class="chip suggest" data-prompt="/swarm Which is better for a coding agent, GPT-5.6 Sol or Claude Sonnet 5?">⚖️ /swarm a question</button>
+        <button class="chip suggest" data-prompt="/image A cozy cabin in the snow, warm light">🎨 /image something</button>
+      </div>
+    </div>
+    <div id="timeline" class="timeline"></div>
+    <div id="chatLog" class="chat-log"></div>
+    <div class="composer">
+      <div id="palette" class="palette hidden"><div id="paletteList"></div></div>
+      <div class="attach-row">
+        <input type="file" id="fileInput" multiple />
+        <span id="attachHint" class="hint">images → vision · code/txt → context</span>
+      </div>
+      <div class="composer-row">
+        <textarea id="userInput" rows="3" placeholder="Ask anything…  ( / for commands · Enter to send )"></textarea>
+        <div class="composer-btns">
+          <button id="btnSend" class="btn primary">Send →</button>
+          <button id="btnStop" class="btn ghost" disabled>Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <section id="previewDock" class="hidden">
+      <div class="preview-head">
+        <strong>Live preview</strong>
+        <span class="spacer"></span>
+        <button id="btnPreviewFull" class="btn sm ghost">Fullscreen</button>
+        <button id="btnPreviewClear" class="btn sm ghost">Close</button>
+      </div>
+      <iframe id="previewFrame" sandbox="allow-scripts" title="sandbox preview"></iframe>
+      <pre id="previewLog" class="preview-log"></pre>
+    </section>
+  </main>
+</div>
+
+<!-- History drawer -->
+<div id="historyPanel" class="drawer hidden">
+  <div class="drawer-head"><b>🕘 History</b><button id="btnHistoryClose" class="btn sm ghost">✕</button></div>
+  <div class="row"><button id="btnNewChat" class="btn sm">+ New chat</button><button id="btnExportSession" class="btn ghost sm">Export</button></div>
+  <div id="sessionList" class="session-list"></div>
+</div>
+
+<!-- Studio drawer -->
+<div id="studioPanel" class="drawer wide hidden">
+  <div class="drawer-head"><b>🧪 Studio</b><button id="btnStudioClose" class="btn sm ghost">✕</button></div>
+  <details class="studio-sec" open><summary>👁 Vision</summary>
+    <input id="visionUrl" value="https://assets.puter.site/doge.jpeg" />
+    <div class="row"><input type="file" id="visionFile" accept="image/*" /><input id="visionQ" value="What do you see in this image?" /></div>
+    <div class="row"><button id="btnVision" class="btn primary sm">Analyze</button></div>
+    <div id="visionOut" class="md"></div>
+  </details>
+  <details class="studio-sec"><summary>🔊 Voice</summary>
+    <div class="row"><select id="ttsModel"><option value="gpt-4o-mini-tts" selected>gpt-4o-mini-tts</option><option value="tts-1">tts-1</option><option value="tts-1-hd">tts-1-hd</option></select>
+    <select id="ttsVoice"><option value="alloy" selected>alloy</option><option value="echo">echo</option><option value="fable">fable</option><option value="nova">nova</option><option value="onyx">onyx</option><option value="shimmer">shimmer</option></select>
+    <button id="btnTTS" class="btn primary sm">Speak</button></div>
+    <textarea id="ttsText" rows="2">Hello world! This is OpenAI text-to-speech via Puter.js.</textarea>
+    <div id="ttsOut"></div>
+  </details>
+  <details class="studio-sec"><summary>📁 Cloud files</summary>
+    <div class="row"><button id="btnFsList" class="btn sm">List</button><input id="fsPath" placeholder="notes/hello.txt" />
+    <button id="btnFsRead" class="btn sm">Read</button><button id="btnFsWrite" class="btn sm">Write</button></div>
+    <textarea id="fsBody" rows="4" placeholder="File contents…"></textarea>
+    <div id="fsOut" class="md"></div>
+  </details>
+  <details class="studio-sec"><summary>🌐 Browser</summary>
+    <div class="row"><input id="browserUrl" value="https://example.com" />
+    <button id="btnFetch" class="btn sm">Fetch</button><button id="btnSummarize" class="btn primary sm">Summarize</button></div>
+    <div id="browserOut" class="md"></div>
+  </details>
+  <details class="studio-sec"><summary>🚀 Deploy to Puter</summary>
+    <div class="row"><input id="deploySub" placeholder="subdomain" /><input id="deployDir" value="super-agent-site" /></div>
+    <div class="row"><button id="btnDeploy" class="btn primary sm">Create / update site</button><button id="btnWorkerHealth" class="btn sm">Worker /health</button></div>
+    <div id="deployOut" class="md"></div>
+  </details>
+</div>
+
+<!-- Settings modal -->
+<div id="settingsModal" class="modal-wrap hidden">
+  <div class="modal-card">
+    <h3>⚙️ Settings <span class="tag">advanced</span></h3>
+    <label class="side-label">Temperature <span id="tempVal">0.7</span></label>
+    <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" />
+    <label class="side-label" style="margin-top:10px">Max tokens (blank = default)</label>
+    <input id="maxTokens" type="number" min="1" max="128000" placeholder="default" />
+    <label class="side-label" style="margin-top:10px">Tool approval</label>
+    <select id="approvalMode"><option value="plan">Plan (dry-run)</option><option value="auto" selected>Auto (reads auto, writes ask)</option><option value="yolo">Yolo (ask once)</option></select>
+    <label class="side-label" style="margin-top:10px">System prompt (blank = default)</label>
+    <textarea id="systemPrompt" rows="2" placeholder="Optional system instruction…"></textarea>
+    <div style="margin-top:8px">
+      <label class="chk"><input type="checkbox" id="streamToggle" checked /> Stream responses</label>
+      <label class="chk"><input type="checkbox" id="webSearchToggle" /> Web search (OpenAI models)</label>
+    </div>
+    <div class="modal-btns"><button id="btnSettingsClose" class="btn primary">Done</button></div>
+  </div>
+</div>
+
+<!-- Model library overlay -->
+<div id="libraryOverlay" class="overlay hidden">
+  <div class="overlay-card">
+    <div class="overlay-head"><h3>🧠 Choose a model</h3><button id="btnLibraryClose" class="btn sm ghost">✕</button></div>
+    <div class="row"><input id="librarySearch" placeholder="Search models…" />
+      <button class="btn sm lib-filter" data-v="All">All</button>
+      <button class="btn sm ghost lib-filter" data-v="OpenAI">OpenAI</button>
+      <button class="btn sm ghost lib-filter" data-v="Claude">Claude</button>
+      <button id="btnLibRefresh" class="btn sm ghost" title="Merge live list">↻</button></div>
+    <div id="libraryGrid" class="lib-grid"></div>
+  </div>
+</div>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="modalWrap" class="modal-wrap hidden">
+  <div class="modal-card">
+    <h3 id="modalTitle">Confirm</h3>
+    <div id="modalBody" class="modal-body"></div>
+    <div class="modal-btns">
+      <button id="modalCancel" class="btn ghost">Cancel</button>
+      <button id="modalOk" class="btn primary">Allow</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/models.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/sandbox.js"></script>
+<script src="js/agent.js"></script>
+<script src="js/swarm.js"></script>
+<script src="js/commands.js"></script>
+<script src="js/library.js"></script>
+<script src="js/files.js"></script>
+<script src="js/sessions.js"></script>
+<script src="js/deploy.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

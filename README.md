@@ -3,12 +3,18 @@
 Keyless AI chat + agent + swarm app. All AI runs through Puter.js User-Pays —
 no API keys, users cover their own usage via their Puter account.
 
+## Pages
+
+- `index.html` — public **landing page** (hero, features, FAQ, sign-in CTA)
+- `app.html` — the **app** (sign-in required): chat-first UI, `/` commands,
+  model library, live preview, Studio drawer (vision/voice/files/browser/deploy)
+
 ## Run locally (HTTP required — not file://)
 
 ```bash
 cd puter-ai-chat-app
 python3 -m http.server 8080
-# open http://localhost:8080
+# landing: http://localhost:8080/   app: http://localhost:8080/app.html
 ```
 
 Alternative: `npx serve .` (serve is installed on this machine).

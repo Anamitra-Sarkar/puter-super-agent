@@ -1,10 +1,11 @@
-/* App wiring: model select, tabs, composer, auth, buttons. */
+/* App shell wiring: auth gate, model pill + library, palette composer, drawers. */
 (function () {
   function el(id) { return document.getElementById(id); }
+  function toast(m, k) { if (window.PuterUI) window.PuterUI.toast(m, k); }
 
   function fillModels(extra) {
     const sel = el("modelSelect");
-    const keep = sel.value;
+    const keep = sel.value || null;
     sel.innerHTML = "";
     for (const g of window.PuterModels.optionGroups()) {
       const og = document.createElement("optgroup");
@@ -28,25 +29,8 @@
       }
       if (og.children.length) sel.appendChild(og);
     }
-    sel.value = ([...sel.querySelectorAll("option")].some((o) => o.value === keep) && keep)
-      || window.PuterModels.DEFAULT_MODEL;
-    updMeta();
-    const agg = el("aggregatorModel");
-    agg.innerHTML = "";
-    for (const id of ["gpt-5.6-luna", "gpt-5.6-sol", "claude-sonnet-5", "claude-haiku-4-5"]) {
-      const o = document.createElement("option"); o.value = id; o.textContent = id; agg.appendChild(o);
-    }
-  }
-  function updMeta() {
-    const id = el("modelSelect").value;
-    const m = window.PuterModels.describe(id);
-    const vclass = m.vendor === "OpenAI" ? "vendor-openai" : "vendor-claude";
-    el("modelMeta").innerHTML = "";
-    const v = document.createElement("span");
-    v.className = vclass;
-    v.textContent = `${m.vendor} · ${window.PuterModels.costOf(id)}`;
-    el("modelMeta").appendChild(v);
-    el("modelMeta").appendChild(document.createTextNode(` · ${m.desc}`));
+    if (keep && [...sel.querySelectorAll("option")].some((o) => o.value === keep)) sel.value = keep;
+    else window.PuterLibrary.restore(sel);
   }
 
   function setPill(state, text) {
@@ -55,86 +39,97 @@
     p.textContent = text;
   }
 
-  async function refreshAuth() {
-    const box = el("authBox");
-    setPill("", "checking…");
-    try {
-      const signed = await puter.auth.isSignedIn();
-      if (signed) {
-        const u = await puter.auth.getUser();
-        box.textContent = `Signed in as ${u.username || u.uuid || "user"} (User-Pays active)`;
-        setPill("ok", "● signed in");
-      } else {
-        box.textContent = "Not signed in — click Sign in (top-right), allow the popup, then chat.";
-        setPill("", "○ signed out");
-      }
-    } catch {
-      box.textContent = "Auth unknown — calls will prompt if needed.";
-      setPill("err", "auth unknown");
-    }
-    try {
-      const usage = await puter.auth.getMonthlyUsage();
-      const parts = [];
-      if (usage) {
-        for (const [k, v] of Object.entries(usage)) {
-          if (v && typeof v === "object" && (v.used !== undefined || v.allowance !== undefined)) {
-            parts.push(`${k}: ${v.used ?? "?"}${v.allowance ? " / " + v.allowance : ""}`);
-          }
-        }
-      }
-      el("usageBox").textContent = "Usage: " + (parts.length ? parts.slice(0, 4).join(" · ") : JSON.stringify(usage).slice(0, 160));
-    } catch {
-      el("usageBox").textContent = "Usage: unavailable (sign in to see allowance)";
-    }
-  }
-
   async function sendCurrent() {
     const text = el("userInput").value.trim();
     if (!text && !el("fileInput").files.length) return;
+    if (await window.PuterCommands.handle(text)) { el("userInput").value = ""; return; }
     el("userInput").value = "";
+    window.PuterCommands.hide();
     const atts = await window.PuterFiles.readAttachments(el("fileInput").files);
     el("fileInput").value = "";
-    const mode = el("agentMode").value;
-    if (mode === "compare") { el("swarmPrompt").value = text; switchTab("swarm"); window.PuterSwarm.runCompare(); return; }
-    if (mode === "pipeline") { el("swarmPrompt").value = text; switchTab("swarm"); window.PuterSwarm.runPipeline(); return; }
     window.PuterAgent.send(text, atts);
   }
 
-  function switchTab(name) {
-    document.querySelectorAll(".tab").forEach((t) => t.classList.toggle("active", t.dataset.tab === name));
-    document.querySelectorAll(".panel").forEach((p) => p.classList.toggle("active", p.id === "tab-" + name));
+  function toggleDrawer(id) {
+    for (const d of ["historyPanel", "studioPanel"]) {
+      if (d === id) el(d).classList.toggle("hidden");
+      else el(d).classList.add("hidden");
+    }
   }
 
-  window.addEventListener("DOMContentLoaded", () => {
+  window.addEventListener("DOMContentLoaded", async () => {
+    // Auth gate: app requires sign-in.
+    if (!(await window.PuterAuth.isSignedIn())) {
+      toast("Sign in to continue", "info");
+      location.href = "index.html";
+      return;
+    }
     fillModels();
     window.PuterSessions.load();
-    refreshAuth();
-    document.querySelectorAll(".tab").forEach((t) => t.onclick = () => switchTab(t.dataset.tab));
-    el("modelSelect").onchange = updMeta;
-    el("temperature").oninput = (e) => (el("tempVal").textContent = e.target.value);
-    el("btnSend").onclick = sendCurrent;
-    el("btnStop").onclick = () => window.PuterAgent.stop();
-    el("userInput").addEventListener("keydown", (e) => {
-      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendCurrent(); }
+    setPill("ok", "● signed in");
+    const u = await window.PuterAuth.currentUser();
+    const name = (u && (u.username || u.uuid)) || "you";
+    el("accountName").textContent = name;
+    el("accountName2").textContent = name;
+    el("accountAvatar").textContent = String(name).slice(0, 1).toUpperCase();
+    el("accountUsage").textContent = (await window.PuterAuth.usageLines()).join(" · ");
+
+    // Header
+    el("modelPill").onclick = () => window.PuterLibrary.open();
+    el("btnLibraryClose").onclick = () => window.PuterLibrary.close();
+    el("libraryOverlay").onclick = (e) => { if (e.target === el("libraryOverlay")) window.PuterLibrary.close(); };
+    el("librarySearch").oninput = () => window.PuterLibrary.render();
+    document.querySelectorAll(".lib-filter").forEach((b) => b.onclick = () => {
+      document.querySelectorAll(".lib-filter").forEach((x) => x.classList.add("ghost"));
+      b.classList.remove("ghost");
+      window.PuterLibrary.setVendor(b.dataset.v);
     });
-    el("btnSignIn").onclick = async () => {
-      window.PuterUI.toast("Opening Puter sign-in — allow the popup", "info");
-      try { await puter.auth.signIn(); window.PuterUI.toast("Signed in", "ok"); }
-      catch (e) { window.PuterUI.toast("Sign-in blocked or cancelled — allow popups and retry", "err"); }
-      refreshAuth();
-    };
-    el("btnSignOut").onclick = async () => { try { await puter.auth.signOut(); } catch {} refreshAuth(); window.PuterUI.toast("Signed out", "info"); };
-    el("btnRefreshModels").onclick = async () => {
-      el("btnRefreshModels").textContent = "loading…";
+    el("btnLibRefresh").onclick = async () => {
       const ids = await window.PuterModels.liveModelIds();
       fillModels(ids);
-      el("btnRefreshModels").textContent = `↻ live list${ids.length ? " (" + ids.length + ")" : ""}`;
+      window.PuterLibrary.render();
+      toast(ids.length ? `Merged ${ids.length} live models` : "Live list unavailable", ids.length ? "ok" : "err");
     };
-    el("btnNewChat").onclick = () => { window.PuterSessions.newSession(); const h = document.getElementById("emptyState"); if (h) h.classList.remove("bye"); window.PuterUI.toast("New chat started", "info"); };
+    el("accountChip").onclick = (e) => { e.stopPropagation(); el("accountMenu").classList.toggle("hidden"); };
+    document.onclick = () => el("accountMenu").classList.add("hidden");
+    el("btnSignOut").onclick = async () => {
+      await window.PuterAuth.signOut();
+      location.href = "index.html";
+    };
+
+    // Drawers + settings
+    el("btnHistory").onclick = () => toggleDrawer("historyPanel");
+    el("btnHistoryClose").onclick = () => el("historyPanel").classList.add("hidden");
+    el("btnStudio").onclick = () => toggleDrawer("studioPanel");
+    el("btnStudioClose").onclick = () => el("studioPanel").classList.add("hidden");
+    el("btnSettings").onclick = () => el("settingsModal").classList.remove("hidden");
+    el("btnSettingsClose").onclick = () => el("settingsModal").classList.add("hidden");
+    el("settingsModal").onclick = (e) => { if (e.target === el("settingsModal")) el("settingsModal").classList.add("hidden"); };
+    el("temperature").oninput = (e) => (el("tempVal").textContent = e.target.value);
+
+    // Composer + palette
+    el("btnSend").onclick = sendCurrent;
+    el("btnStop").onclick = () => window.PuterAgent.stop();
+    el("userInput").addEventListener("input", () => window.PuterCommands.renderPalette());
+    el("userInput").addEventListener("keydown", (e) => {
+      if (e.key === "ArrowDown" && !el("palette").classList.contains("hidden")) { e.preventDefault(); window.PuterCommands.move(1); }
+      else if (e.key === "ArrowUp" && !el("palette").classList.contains("hidden")) { e.preventDefault(); window.PuterCommands.move(-1); }
+      else if (e.key === "Enter" && !e.shiftKey) {
+        if (!el("palette").classList.contains("hidden") && el("userInput").value.startsWith("/")) {
+          const v = el("userInput").value;
+          if (!v.includes(" ")) { e.preventDefault(); window.PuterCommands.enter(); return; }
+        }
+        e.preventDefault(); sendCurrent();
+      } else if (e.key === "Escape") window.PuterCommands.hide();
+    });
+    document.querySelectorAll(".suggest").forEach((b) => b.onclick = () => {
+      el("userInput").value = b.dataset.prompt;
+      sendCurrent();
+    });
+
+    // Sessions / studio / preview
+    el("btnNewChat").onclick = () => { window.PuterSessions.newSession(); toast("New chat started", "info"); };
     el("btnExportSession").onclick = () => window.PuterSessions.export();
-    el("btnSwarmGo").onclick = () => window.PuterSwarm.runCompare();
-    el("btnPipelineGo").onclick = () => window.PuterSwarm.runPipeline();
-    el("btnGenImg").onclick = () => window.PuterFiles.doGenImg();
     el("btnVision").onclick = () => window.PuterFiles.doVision();
     el("btnTTS").onclick = () => window.PuterFiles.doTTS();
     el("btnFsList").onclick = () => window.PuterFiles.fsList();
@@ -145,14 +140,8 @@
     el("btnDeploy").onclick = () => window.PuterDeploy.deploy();
     el("btnWorkerHealth").onclick = () => window.PuterDeploy.workerHealth();
     el("btnPreviewClear").onclick = () => window.PuterSandbox.clear();
-    el("btnPreviewFull").onclick = () => {
-      const f = el("previewFrame");
-      if (f.requestFullscreen) f.requestFullscreen();
-    };
-    document.querySelectorAll(".suggest").forEach((b) => b.onclick = () => {
-      el("userInput").value = b.dataset.prompt;
-      sendCurrent();
-    });
-    window.PuterAgent.timeline("Ready. Pick a model and send — or try Swarm. Sign-in happens on first AI call.");
+    el("btnPreviewFull").onclick = () => { const f = el("previewFrame"); if (f.requestFullscreen) f.requestFullscreen(); };
+
+    window.PuterAgent.timeline("Ready — chat, or type / for commands.");
   });
 })();

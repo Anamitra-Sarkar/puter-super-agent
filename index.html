@@ -3,9 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Puter Super-Agent — OpenAI + Claude Chat</title>
-<script src="https://js.puter.com/v2/"></script>
-<script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<title>Super-Agent — Every AI model, one simple chat</title>
+<meta name="description" content="Chat with all OpenAI and Claude models through Puter.js. No API keys — you sign in, usage bills to your own allowance." />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
@@ -13,248 +12,101 @@
 </head>
 <body>
 <header id="topbar">
-  <div class="brand"><span class="brand-dot"></span><span>Puter Super-Agent</span><span class="brand-tag">OpenAI + Claude · keyless</span></div>
+  <div class="brand"><span class="brand-dot"></span><span>Super-Agent</span></div>
+  <nav class="land-nav">
+    <a href="#features">Features</a><a href="#how">How it works</a><a href="#models">Models</a><a href="#faq">FAQ</a>
+  </nav>
   <div class="top-right">
-    <span id="statusPill" class="pill">connecting…</span>
-    <button id="btnSignIn" class="btn primary sm">Sign in</button>
-    <button id="btnSignOut" class="btn ghost sm">Sign out</button>
+    <div id="landingChip" class="chip-wrap hidden">
+      <button class="account-chip" onclick="location.href='app.html'"><span id="landingAvatar" class="avatar">?</span><span id="landingUser">…</span></button>
+      <button id="btnLandingOut" class="btn ghost sm">Sign out</button>
+    </div>
+    <button id="ctaBtn" class="btn primary sm">Sign in with Puter →</button>
+    <button id="openAppBtn" class="btn primary sm hidden">Open app →</button>
   </div>
 </header>
 
-<div id="app">
-  <aside id="sidebar">
-    <div class="side-section">
-      <label class="side-label">Account &amp; usage</label>
-      <div id="authBox" class="auth-box">Checking sign-in…</div>
-      <div id="usageBox" class="usage-box">Usage: —</div>
+<main class="land">
+  <section class="land-hero reveal in">
+    <div class="hero-badge">✨ GPT-6 Astra · Claude Fable · GPT Image · Voice — keyless</div>
+    <h1>Every frontier AI model.<br />One simple chat.</h1>
+    <p class="muted big">Super-Agent puts all OpenAI and Claude models behind a clean chat box with <code>/</code> commands. No API keys, no servers — sign in with Puter and your usage bills to your own allowance.</p>
+    <div class="chips" style="justify-content:flex-start">
+      <button id="ctaBtn2" class="btn primary" style="border-radius:99px;padding:11px 24px">Get started — it's free →</button>
+      <a class="btn" style="border-radius:99px;padding:11px 24px;text-decoration:none" href="#how">See how it works</a>
     </div>
-    <div class="side-section">
-      <label class="side-label" for="modelSelect">Model <span class="cost-legend">$ cheap · $$$ premium</span></label>
-      <select id="modelSelect"></select>
-      <div id="modelMeta" class="model-meta"></div>
-      <div class="row">
-        <button id="btnRefreshModels" class="btn ghost sm" title="Refresh live model list from Puter">↻ live list</button>
-      </div>
+    <div class="ticker"><div class="ticker-in" id="tickerIn"></div></div>
+  </section>
+
+  <section class="land-strip reveal">
+    <div><b>30+</b><span>chat models</span></div>
+    <div><b>0</b><span>API keys needed</span></div>
+    <div><b>/</b><span>commands, not menus</span></div>
+    <div><b>1</b><span>click deploy to Puter</span></div>
+  </section>
+
+  <section id="features" class="land-sec">
+    <h2 class="reveal">Simple on the surface, powerful underneath</h2>
+    <div class="feat-grid">
+      <div class="feat reveal"><div class="feat-ic">💬</div><b>Chat with anything</b><p>GPT-6 Astra for hard reasoning, Luna or Haiku when you want fast and cheap. Switch anytime from the model library.</p></div>
+      <div class="feat reveal"><div class="feat-ic">/</div><b>Slash commands</b><p><code>/code</code> builds + previews, <code>/swarm</code> asks 3 models at once, <code>/image</code> draws, <code>/speak</code> reads aloud. No settings maze.</p></div>
+      <div class="feat reveal"><div class="feat-ic">🌀</div><b>Swarm mode</b><p>Fan a question out to three models in parallel, then get one synthesized best answer. Planner → builder → critic pipelines too.</p></div>
+      <div class="feat reveal"><div class="feat-ic">👁</div><b>See + hear</b><p>Drop in images for vision analysis, generate GPT images, talk with OpenAI voices — all inside the chat.</p></div>
+      <div class="feat reveal"><div class="feat-ic">🪟</div><b>Live preview</b><p>Ask for a page and watch it render in the sandbox panel, Manus-style. Console output included.</p></div>
+      <div class="feat reveal"><div class="feat-ic">🚀</div><b>Deploy from chat</b><p>Ship the app to <code>*.puter.site</code> with a backend worker riding along. Say the word, it's live.</p></div>
     </div>
-    <div class="side-section grid2">
-      <div><label class="side-label">Temperature <span id="tempVal">0.7</span></label>
-        <input id="temperature" type="range" min="0" max="2" step="0.1" value="0.7" /></div>
-      <div><label class="side-label">Max tokens</label>
-        <input id="maxTokens" type="number" min="1" max="128000" placeholder="default" /></div>
+  </section>
+
+  <section id="how" class="land-sec alt">
+    <h2 class="reveal">How it works</h2>
+    <div class="steps">
+      <div class="step reveal"><span class="step-n">1</span><b>Sign in with Puter</b><p>One click, free account. Puter's User-Pays model means AI usage bills to <i>your</i> allowance — the developer pays nothing and holds no keys.</p></div>
+      <div class="step reveal"><span class="step-n">2</span><b>Pick a model, start cheap</b><p>Begin with nano or luna (pennies). Reach for Astra Pro or Opus only when the task deserves it — each model shows its cost tier.</p></div>
+      <div class="step reveal"><span class="step-n">3</span><b>Type <code>/</code> and build</b><p>Code, compare models, generate images, browse the web, deploy — from one box. Advanced knobs hide in Settings.</p></div>
     </div>
-    <div class="side-section grid2">
-      <div><label class="side-label">Mode</label>
-        <select id="agentMode">
-          <option value="chat">Chat</option>
-          <option value="agent" selected>Agent + tools</option>
-          <option value="compare">Swarm compare</option>
-          <option value="pipeline">Swarm pipeline</option>
-        </select></div>
-      <div><label class="side-label">Approval</label>
-        <select id="approvalMode">
-          <option value="plan">Plan (dry-run)</option>
-          <option value="auto" selected>Auto (read auto, writes ask)</option>
-          <option value="yolo">Yolo (ask once)</option>
-        </select></div>
+  </section>
+
+  <section id="models" class="land-sec">
+    <h2 class="reveal">The full lineup, included</h2>
+    <p class="muted reveal">Every model below works out of the box — no keys, no setup.</p>
+    <div class="model-wall reveal">
+      <div><b class="lib-vendor v-openai">OpenAI</b><p>gpt-6-astra (+pro) · gpt-5.6 sol / terra / luna (+pro) · gpt-5.5 (+pro) · gpt-5.4 family · gpt-5.3-codex · gpt-oss · GPT Image · TTS</p></div>
+      <div><b class="lib-vendor v-claude">Claude</b><p>fable-5-1 · opus-5 (+fast) · sonnet-5 · opus 4.8–4 · sonnet 4.6–4 · haiku-4-5</p></div>
     </div>
-    <div class="side-section">
-      <label class="side-label">Toggles</label>
-      <label class="chk"><input type="checkbox" id="streamToggle" checked /> Stream responses</label>
-      <label class="chk"><input type="checkbox" id="webSearchToggle" /> Web search (OpenAI models)</label>
-      <label class="chk"><input type="checkbox" id="swarmSynth" checked /> Synthesize swarm answers</label>
+  </section>
+
+  <section id="faq" class="land-sec alt">
+    <h2 class="reveal">Questions</h2>
+    <div class="faq reveal">
+      <div class="faq-item"><button class="faq-q">Is it really free? What's User-Pays?</button><div class="faq-a">You sign in with your own free Puter account, and AI usage counts against your personal allowance — so the app needs no API keys and costs its developer nothing. Heavy premium models can exhaust a free allowance; cheap models go a long way.</div></div>
+      <div class="faq-item"><button class="faq-q">I saw "402 Insufficient credits" — what do I do?</button><div class="faq-a">That model + request exceeded the available balance. Switch to a cheap model (gpt-5.4-nano, gpt-5.6-luna, claude-haiku-4-5) and retry. Save Astra Pro and Opus for tasks that need them.</div></div>
+      <div class="faq-item"><button class="faq-q">Do I need any API keys?</button><div class="faq-a">No. That's the point — Puter.js is keyless. Never paste keys into this app.</div></div>
+      <div class="faq-item"><button class="faq-q">Which model should I start with?</button><div class="faq-a">gpt-5.4-nano for everyday chat, gpt-5.6-sol or claude-sonnet-5 for serious work, /swarm when you want a second opinion built in.</div></div>
+      <div class="faq-item"><button class="faq-q">Can I put my own app online?</button><div class="faq-a">Yes — open the app, use Studio → Deploy, pick a subdomain, and you're live on *.puter.site with a backend worker included.</div></div>
     </div>
-    <div class="side-section">
-      <label class="side-label">System prompt / skill</label>
-      <select id="skillSelect">
-        <option value="">General assistant</option>
-        <option value="coder">Coder (codex-style)</option>
-        <option value="researcher">Researcher (web-first)</option>
-        <option value="writer">Writer</option>
-        <option value="reviewer">Critic / reviewer</option>
-      </select>
-      <textarea id="systemPrompt" rows="3" placeholder="Optional system instruction…"></textarea>
-    </div>
-    <div class="side-section">
-      <label class="side-label">Sessions</label>
-      <div class="row">
-        <button id="btnNewChat" class="btn sm">+ New</button>
-        <button id="btnExportSession" class="btn ghost sm">Export</button>
-      </div>
-      <div id="sessionList" class="session-list"></div>
-    </div>
-    <div class="side-foot">Powered by <a href="https://developer.puter.com" target="_blank" rel="noopener">Puter</a> · User-Pays, no API keys</div>
-  </aside>
+  </section>
 
-  <main id="main">
-    <nav id="tabs">
-      <button data-tab="chat" class="tab active">Chat</button>
-      <button data-tab="swarm" class="tab">Swarm</button>
-      <button data-tab="image" class="tab">Image</button>
-      <button data-tab="vision" class="tab">Vision</button>
-      <button data-tab="speech" class="tab">Speech</button>
-      <button data-tab="files" class="tab">Files</button>
-      <button data-tab="browser" class="tab">Browser</button>
-      <button data-tab="deploy" class="tab">Deploy</button>
-    </nav>
+  <section class="land-cta reveal">
+    <h2>Stop juggling keys. Start chatting.</h2>
+    <button class="btn primary" style="border-radius:99px;padding:12px 30px;font-size:15px" onclick="document.getElementById('ctaBtn').click()">Sign in with Puter →</button>
+  </section>
+</main>
 
-    <section id="tab-chat" class="panel active">
-      <div id="emptyState" class="hero">
-        <div class="hero-badge">✨ All OpenAI + Claude models · free via Puter</div>
-        <h1>What should we build today?</h1>
-        <p class="muted">Pick a model on the left, or fire a 3-model swarm. Start cheap — upgrade to Astra/Opus when it matters.</p>
-        <div class="chips">
-          <button class="chip suggest" data-prompt="Build a landing page for a coffee brand. Show me the preview.">☕ Landing page + preview</button>
-          <button class="chip suggest" data-prompt="Compare: should I use GPT-5.6 Sol or Claude Sonnet 5 for a coding agent?">⚖️ Compare two models</button>
-          <button class="chip suggest" data-prompt="Fetch https://example.com and summarize what it says.">🌐 Fetch + summarize a page</button>
-          <button class="chip suggest" data-prompt="Write a haiku about monsoons.">🍃 Write a haiku</button>
-        </div>
-      </div>
-      <div id="timeline" class="timeline"></div>
-      <div id="chatLog" class="chat-log"></div>
-      <div class="composer">
-        <div class="attach-row">
-          <input type="file" id="fileInput" multiple />
-          <span id="attachHint" class="hint">images → vision · txt/md/code → context</span>
-        </div>
-        <div class="composer-row">
-          <textarea id="userInput" rows="3" placeholder="Ask anything… (Enter to send, Shift+Enter newline)"></textarea>
-          <div class="composer-btns">
-            <button id="btnSend" class="btn primary">Send →</button>
-            <button id="btnStop" class="btn ghost" disabled>Stop</button>
-          </div>
-        </div>
-      </div>
-    </section>
-
-    <section id="tab-swarm" class="panel">
-      <h2>Swarm compare &amp; pipeline</h2>
-      <p class="muted">Compare swarm fans out to up to 4 models in parallel. Pipeline runs Planner → Builder → Critic.</p>
-      <div class="row wrap">
-        <label class="chk"><input type="checkbox" class="swarm-model" value="gpt-5.6-sol" checked /> gpt-5.6-sol</label>
-        <label class="chk"><input type="checkbox" class="swarm-model" value="claude-sonnet-5" checked /> claude-sonnet-5</label>
-        <label class="chk"><input type="checkbox" class="swarm-model" value="gpt-6-astra" checked /> gpt-6-astra</label>
-        <label class="chk"><input type="checkbox" class="swarm-model" value="claude-fable-5-1" /> claude-fable-5-1</label>
-      </div>
-      <div class="row">
-        <input id="swarmPrompt" placeholder="Swarm prompt…" />
-        <button id="btnSwarmGo" class="btn primary">Run compare</button>
-        <button id="btnPipelineGo" class="btn">Run pipeline</button>
-      </div>
-      <div class="row">
-        <label class="side-label">Aggregator</label>
-        <select id="aggregatorModel"><option value="gpt-5.6-luna">gpt-5.6-luna (cheap)</option></select>
-      </div>
-      <div id="swarmCards" class="swarm-cards"></div>
-      <div id="swarmResult" class="swarm-result"></div>
-    </section>
-
-    <section id="tab-image" class="panel">
-      <h2>Image generation <span class="tag">GPT Image</span></h2>
-      <div class="row">
-        <input id="imgPrompt" placeholder="A futuristic cityscape at night…" />
-        <select id="imgModel">
-          <option value="gpt-image-2">gpt-image-2</option>
-          <option value="gpt-image-1.5">gpt-image-1.5</option>
-          <option value="gpt-image-1-mini" selected>gpt-image-1-mini (default/cheap)</option>
-          <option value="gpt-image-1">gpt-image-1</option>
-        </select>
-        <select id="imgQuality"><option value="low" selected>low</option><option value="medium">medium</option><option value="high">high</option></select>
-        <button id="btnGenImg" class="btn primary">Generate</button>
-      </div>
-      <div id="imgOut" class="img-out"></div>
-    </section>
-
-    <section id="tab-vision" class="panel">
-      <h2>Vision analysis</h2>
-      <div class="row">
-        <input id="visionUrl" placeholder="Image URL (or pick a file below)" value="https://assets.puter.site/doge.jpeg" />
-        <input type="file" id="visionFile" accept="image/*" />
-        <button id="btnVision" class="btn primary">Analyze</button>
-      </div>
-      <div class="row"><input id="visionQ" placeholder="Question about the image…" value="What do you see in this image?" /></div>
-      <div id="visionOut" class="md"></div>
-    </section>
-
-    <section id="tab-speech" class="panel">
-      <h2>Text to speech <span class="tag">OpenAI via Puter</span></h2>
-      <div class="row">
-        <select id="ttsModel"><option value="gpt-4o-mini-tts" selected>gpt-4o-mini-tts</option><option value="tts-1">tts-1</option><option value="tts-1-hd">tts-1-hd</option></select>
-        <select id="ttsVoice"><option value="alloy" selected>alloy</option><option value="echo">echo</option><option value="fable">fable</option><option value="nova">nova</option><option value="onyx">onyx</option><option value="shimmer">shimmer</option></select>
-        <button id="btnTTS" class="btn primary">Speak</button>
-      </div>
-      <textarea id="ttsText" rows="3">Hello world! This is OpenAI text-to-speech via Puter.js.</textarea>
-      <div id="ttsOut"></div>
-    </section>
-
-    <section id="tab-files" class="panel">
-      <h2>Puter cloud files</h2>
-      <div class="row">
-        <button id="btnFsList" class="btn">List AppData</button>
-        <input id="fsPath" placeholder="path e.g. notes/hello.txt" />
-        <button id="btnFsRead" class="btn">Read</button>
-        <button id="btnFsWrite" class="btn">Write prompt box</button>
-      </div>
-      <textarea id="fsBody" rows="6" placeholder="File contents…"></textarea>
-      <div id="fsOut" class="md"></div>
-    </section>
-
-    <section id="tab-browser" class="panel">
-      <h2>Browser <span class="tag">CORS-free fetch + preview</span></h2>
-      <div class="row">
-        <input id="browserUrl" placeholder="https://example.com" value="https://example.com" />
-        <button id="btnFetch" class="btn">Fetch</button>
-        <button id="btnSummarize" class="btn primary">Fetch + summarize</button>
-      </div>
-      <div id="browserOut" class="md"></div>
-    </section>
-
-    <section id="tab-deploy" class="panel">
-      <h2>Self-deploy to Puter</h2>
-      <p class="muted">Creates a public <code>*.puter.site</code> from a folder in your Puter FS. The bundled <code>__workers/api.worker.js</code> rides along (dynamic worker).</p>
-      <div class="row">
-        <input id="deploySub" placeholder="subdomain e.g. my-super-agent" />
-        <input id="deployDir" placeholder="source dir (created on first deploy)" value="super-agent-site" />
-        <button id="btnDeploy" class="btn primary">Create / update site</button>
-        <button id="btnWorkerHealth" class="btn">Check worker /health</button>
-      </div>
-      <div id="deployOut" class="md"></div>
-    </section>
-
-    <section id="previewDock">
-      <div class="preview-head">
-        <strong>Live sandbox preview</strong>
-        <span class="muted">agent HTML/JS runs here visibly</span>
-        <span class="spacer"></span>
-        <button id="btnPreviewFull" class="btn sm ghost">Open fullscreen</button>
-        <button id="btnPreviewClear" class="btn sm ghost">Clear</button>
-      </div>
-      <iframe id="previewFrame" sandbox="allow-scripts" title="sandbox preview"></iframe>
-      <pre id="previewLog" class="preview-log"></pre>
-    </section>
-  </main>
-</div>
+<footer class="land-foot">Super-Agent · Powered by <a href="https://developer.puter.com" target="_blank" rel="noopener">Puter</a> · <a href="https://github.com/Anamitra-Sarkar/puter-super-agent" target="_blank" rel="noopener">GitHub</a></footer>
 
 <div id="toasts" aria-live="polite"></div>
-<div id="modalWrap" class="modal-wrap hidden">
-  <div class="modal-card">
-    <h3 id="modalTitle">Confirm</h3>
-    <div id="modalBody" class="modal-body"></div>
-    <div class="modal-btns">
-      <button id="modalCancel" class="btn ghost">Cancel</button>
-      <button id="modalOk" class="btn primary">Allow</button>
-    </div>
-  </div>
-</div>
 
-<script src="js/models.js"></script>
+<script>
+(function () {
+  var names = ["gpt-6-astra","claude-fable-5-1","gpt-5.6-sol","claude-sonnet-5","gpt-5.6-luna","claude-haiku-4-5","gpt-5.4-nano","gpt-5.3-codex","gpt-image-2","gpt-4o-mini-tts","claude-opus-5","gpt-5.6-terra"];
+  var t = document.getElementById("tickerIn");
+  var html = names.map(function (n) { return '<span class="tick">' + n + "</span>"; }).join("");
+  t.innerHTML = html + html;
+})();
+</script>
+<script src="https://js.puter.com/v2/"></script>
 <script src="js/ui.js"></script>
-<script src="js/tools.js"></script>
-<script src="js/sandbox.js"></script>
-<script src="js/agent.js"></script>
-<script src="js/swarm.js"></script>
-<script src="js/files.js"></script>
-<script src="js/sessions.js"></script>
-<script src="js/deploy.js"></script>
-<script src="js/app.js"></script>
+<script src="js/auth.js"></script>
+<script src="js/landing.js"></script>
 </body>
 </html>

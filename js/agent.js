@@ -46,9 +46,11 @@
     if (!Number.isNaN(mt) && mt > 0) o.max_tokens = mt;
     return o;
   }
-  function skillPrompt() {
-    const s = el("skillSelect").value;
-    const custom = el("systemPrompt").value.trim();
+  function skillPrompt(override) {
+    const sel = document.getElementById("skillSelect");
+    const s = override || (sel && sel.value) || "";
+    const customEl = document.getElementById("systemPrompt");
+    const custom = customEl ? customEl.value.trim() : "";
     const presets = {
       coder: "You are an expert coding assistant. Write correct, runnable code. When asked for a UI, ALSO call run_code_preview with the full HTML so the user can see it.",
       researcher: "You are a research assistant. Prefer fresh info: use web_search results and web_fetch for sources, cite URLs.",
@@ -81,7 +83,7 @@
   }
 
   /** Non-streaming tool loop (max 6 steps), then streams the final answer. */
-  async function send(text, attachments) {
+  async function send(text, attachments, skill) {
     stopFlag = false;
     el("btnStop").disabled = false;
     clearTimeline();
@@ -90,7 +92,7 @@
     const withSearch = el("webSearchToggle").checked;
     const stream = el("streamToggle").checked;
     const base = opts();
-    const sys = skillPrompt();
+    const sys = skillPrompt(skill);
 
     addMsg("user", md(text) + (attachments && attachments.length ? `<p class="muted">📎 ${attachments.length} attachment(s)</p>` : ""));
     const media = attachments && attachments.find((a) => a.kind === "image");
@@ -146,7 +148,16 @@
           const tick = timeline(`⚙ ${name} …`);
           try {
             const out = await T().execute(name, args, {
-              onImage: (img, p) => { const o = document.getElementById("imgOut"); o.prepend(img); timeline("image shown in Image tab"); window.PuterUI.toast("Image ready — see Image tab", "ok"); },
+              onImage: (img, p) => {
+                const o = document.getElementById("imgOut");
+                if (o) { o.prepend(img); timeline("image shown in Image tab"); }
+                else {
+                  img.style.maxWidth = "100%";
+                  const b = addMsg("assistant", `<p><b>🎨 ${escapeHtml(p || "")}</b></p>`, "[image] " + (p || ""));
+                  b.appendChild(img);
+                }
+                window.PuterUI.toast("Image ready", "ok");
+              },
               onAudio: (a) => { const o = document.getElementById("ttsOut"); o.innerHTML = ""; a.setAttribute("controls", ""); o.appendChild(a); a.play().catch(() => {}); window.PuterUI.toast("Playing audio", "ok"); },
               onPreview: (html, title) => { window.PuterSandbox.render(html, title); window.PuterUI.toast("Preview rendered below", "ok"); },
             });

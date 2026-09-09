@@ -25,6 +25,8 @@
     sessions.unshift(current);
     document.getElementById("chatLog").innerHTML = "";
     document.getElementById("timeline").innerHTML = "";
+    const h = document.getElementById("emptyState");
+    if (h) h.classList.remove("bye");
     save(); render();
   }
   function open(id) {
