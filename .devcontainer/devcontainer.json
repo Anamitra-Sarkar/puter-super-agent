@@ -6,7 +6,7 @@
       "version": "latest"
     }
   },
-  "postStartCommand": "nohup python3 -m http.server 8080 --directory /workspaces/puter-super-agent > /tmp/app-server.log 2>&1 &",
+  "postStartCommand": "cd /workspaces/puter-super-agent && (setsid nohup python3 -m http.server 8080 > /tmp/app-server.log 2>&1 < /dev/null &) && sleep 2 && (curl -sf http://localhost:8080/index.html -o /dev/null && echo APP-UP || tail -20 /tmp/app-server.log)",
   "portsAttributes": {
     "8080": {
       "label": "puter-super-agent app",
