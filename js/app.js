@@ -127,7 +127,11 @@
   }
 
   async function collectAttachments() {
-    const atts = await window.PuterFiles.readAttachments(el("fileInput").files);
+    const all = [...el("fileInput").files];
+    const zips = all.filter((f) => /\.zip$/i.test(f.name));
+    for (const z of zips) handleZipUpload(z);
+    const rest = all.filter((f) => !/\.zip$/i.test(f.name));
+    const atts = await window.PuterFiles.readAttachments(rest);
     el("fileInput").value = "";
     renderAttachChips([]);
     return atts;
@@ -146,6 +150,34 @@
     });
   }
 
+  function queueOrSend(text, atts) {
+    if (window.PuterAgent.isBusy()) {
+      queue.push({ text, atts: atts || [] });
+      renderQueue();
+      toast(`Queued (#${queue.length})`, "info");
+      return;
+    }
+    window.PuterAgent.send(text, atts || []);
+  }
+
+  async function handleZipUpload(file) {
+    window.PuterAgent.addMsg("user", `📦 <b>Uploaded ${String(file.name).replace(/</g, "&lt;")}</b>`);
+    toast("Unzipping into codebase…", "info");
+    try {
+      const { count, tree, skipped } = await window.PuterFilegen.unzipToCodebase(file);
+      if (!count) { toast("No readable code files found in zip", "err"); return; }
+      toast(`Added ${count} files to the Code tab`, "ok");
+      if (window.PuterDock) window.PuterDock.open("code");
+      queueOrSend(
+        `I uploaded a codebase zip (${file.name}): ${count} files are now in your Code tab${skipped ? ` (${skipped} binaries/build artifacts skipped)` : ""}.\n` +
+        `Key files:\n${tree.slice(0, 40).join("\n")}\n\nFirst ANALYZE this codebase, then write a step-by-step plan. ` +
+        `After the plan, use ask_user to ask me anything you need (give options with a recommended one each) and WAIT for my confirmation before changing anything.`,
+        []);
+    } catch (e) {
+      toast("Unzip failed: " + String(e.message || e).slice(0, 120), "err");
+    }
+  }
+
   async function sendCurrent(interrupt) {
     const text = el("userInput").value.trim();
     const hasFiles = el("fileInput").files.length > 0;
@@ -154,6 +186,7 @@
     const atts = await collectAttachments();
     el("userInput").value = "";
     window.PuterCommands.hide();
+    if (!text && !atts.length) return; // zip-only sends are handled by the unzip flow
     if (interrupt && window.PuterAgent.isBusy()) {
       window.PuterAgent.stop(); // invalidate in-flight work via generation counter
       queue.length = 0; renderQueue();
@@ -167,7 +200,7 @@
       toast(`Queued (#${queue.length}) — sends when the current answer finishes`, "info");
       return;
     }
-    window.PuterAgent.send(text, atts);
+    queueOrSend(text, atts);
   }
 
   function drainQueue() {
@@ -262,6 +295,7 @@
     el("btnCodeUpload").onclick = () => el("codeFileInput").click();
     el("codeFileInput").onchange = async (e) => {
       for (const f of e.target.files) {
+        if (/\.zip$/i.test(f.name)) { handleZipUpload(f); continue; }
         if (/text|json|javascript|python|html|css|markdown|csv/.test(f.type) || /\.(txt|md|js|ts|py|html|css|json|csv)$/i.test(f.name)) {
           window.PuterCodebase.put(f.name, await f.text());
         } else toast(f.name + " skipped (text files only)", "err");
@@ -320,7 +354,8 @@
 
     // Composer
     el("btnAttach").onclick = () => el("fileInput").click();
-    el("fileInput").onchange = (e) => renderAttachChips([...e.target.files].map((f) => f.name));
+    el("fileInput").onchange = (e) => renderAttachChips(
+      [...e.target.files].filter((f) => !/\.zip$/i.test(f.name)).map((f) => f.name));
     el("btnSend").onclick = () => {
       if (window.PuterAgent.isBusy() && !el("userInput").value.trim() && !el("fileInput").files.length) {
         window.PuterAgent.stop();

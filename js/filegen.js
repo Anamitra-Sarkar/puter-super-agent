@@ -32,9 +32,36 @@
   }
   function extOf(name) { return String(name || "").split(".").pop().toLowerCase(); }
 
-  async function makeZip(files, zipName) {
+  async function ensureJSZip() {
     await loadScript("https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js", "JSZip");
-    const zip = new window.JSZip();
+    return window.JSZip;
+  }
+  /** Unzip an uploaded code archive into the codebase. Returns {count, tree, skipped}. */
+  async function unzipToCodebase(file) {
+    const JSZip = await ensureJSZip();
+    const zip = await JSZip.loadAsync(file);
+    const SKIP = /(^|\/)(node_modules|\.git|__pycache__|\.venv|venv|\.idea|\.vscode|dist|build|\.next)(\/|$)/;
+    let count = 0, skipped = 0;
+    const tree = [];
+    const entries = Object.values(zip.files).filter((e) => !e.dir).slice(0, 300);
+    for (const e of entries) {
+      const name = e.name.replace(/^\.\//, "").slice(0, 140);
+      if (!name || SKIP.test(name)) { skipped++; continue; }
+      if (/\.(png|jpe?g|gif|webp|ico|mp4|mp3|wav|zip|tar|gz|pdf|exe|dll|so|bin|dat)$/i.test(name)) { skipped++; continue; }
+      try {
+        const text = await e.async("string");
+        if (text.length > 200000) { skipped++; continue; }
+        if (window.PuterCodebase) window.PuterCodebase.put(name, text);
+        count++;
+        if (tree.length < 60) tree.push(name);
+      } catch { skipped++; }
+    }
+    if (window.PuterCodebase) window.PuterCodebase.render();
+    return { count, tree, skipped };
+  }
+  async function makeZip(files, zipName) {
+    const JSZip = await ensureJSZip();
+    const zip = new JSZip();
     for (const [name, content] of Object.entries(files)) zip.file(name, content);
     const blob = await zip.generateAsync({ type: "blob" });
     download(blob, zipName || "codebase.zip");
@@ -100,5 +127,5 @@
     download(new Blob([text], { type: mime }), filename);
     return filename + " saved";
   }
-  window.PuterFilegen = { makeFile, makeZip, downloadCodebaseZip };
+  window.PuterFilegen = { makeFile, makeZip, downloadCodebaseZip, unzipToCodebase, ensureJSZip };
 })();

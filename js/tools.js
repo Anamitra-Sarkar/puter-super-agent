@@ -50,6 +50,33 @@
     {
       type: "function",
       function: {
+        name: "ask_user",
+        description: "Ask the user an interactive question mid-task: show options (first can be marked recommended) plus a free-text field and a confirm step. Use after analyzing/planning, before doing the work. ALWAYS use this instead of guessing when a decision affects what you will build.",
+        parameters: {
+          type: "object",
+          properties: {
+            question: { type: "string" },
+            options: {
+              type: "array",
+              items: {
+                type: "object",
+                properties: {
+                  label: { type: "string" },
+                  description: { type: "string" },
+                  recommended: { type: "boolean" },
+                },
+                required: ["label"],
+              },
+            },
+          },
+          required: ["question", "options"],
+        },
+      },
+      _kind: "read",
+    },
+    {
+      type: "function",
+      function: {
         name: "make_file",
         description: "Generate and download a file: zip (JSON map of filename->content), pdf, docx, pptx (slides split by lines containing only ---), tex/md/txt/html/csv/json (raw text).",
         parameters: { type: "object", properties: { filename: { type: "string" }, content: { type: "string" } }, required: ["filename", "content"] },
@@ -146,6 +173,45 @@
     return base;
   }
 
+  /** Interactive question card: option buttons (recommended first) + free text + confirm. */
+  function askUserCard(question, options) {
+    return new Promise((resolve) => {
+      const A = window.PuterAgent;
+      const esc = (s) => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      const opts = (Array.isArray(options) ? options : []).slice(0, 6).map((o, i) =>
+        typeof o === "string" ? { label: o, recommended: i === 0 } : o);
+      const body = A.addMsg("assistant",
+        `<div class="ask-card"><b>❓ ${esc(question)}</b><div class="ask-opts"></div>
+         <div class="row"><input class="ask-custom" placeholder="Or type your own answer…" />
+         <button class="btn primary sm ask-go">Confirm →</button></div></div>`,
+        "[awaiting user answer]");
+      const box = body.querySelector(".ask-opts");
+      const input = body.querySelector(".ask-custom");
+      let picked = null;
+      const lock = () => {
+        box.querySelectorAll("button").forEach((b) => (b.disabled = true));
+        input.disabled = true;
+        body.querySelector(".ask-go").disabled = true;
+      };
+      const done = (val) => { lock(); resolve(val); };
+      opts.forEach((o, i) => {
+        const b = document.createElement("button");
+        b.className = "ask-opt" + (o.recommended || i === 0 ? " rec" : "");
+        b.innerHTML = `<b>${esc(o.label)}${o.recommended || i === 0 ? ' <span class="tag">recommended</span>' : ""}</b>` +
+          (o.description ? `<span class="muted small">${esc(o.description)}</span>` : "");
+        b.onclick = () => { picked = o.label; input.value = o.label; b.classList.add("picked"); };
+        box.appendChild(b);
+      });
+      body.querySelector(".ask-go").onclick = () => {
+        const v = (input.value || picked || (opts[0] && opts[0].label) || "").trim();
+        if (!v) return;
+        done(v);
+      };
+      body.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      if (window.PuterUI) window.PuterUI.toast("The agent needs your input ⬇", "info");
+    });
+  }
+
   async function execute(name, args, ctx) {
     args = args || {};
     switch (name) {
@@ -235,6 +301,10 @@
       case "memory_write": {
         if (window.PuterMemory) await window.PuterMemory.append(String(args.entry || "").slice(0, 500));
         return "Recorded in MEMORY.md.";
+      }
+      case "ask_user": {
+        const ans = await askUserCard(args.question || "A question for you:", args.options || []);
+        return "User answered: " + ans;
       }
       default:
         throw new Error("Unknown tool: " + name);
