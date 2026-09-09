@@ -121,6 +121,8 @@
     d.className = "t";
     d.textContent = text;
     t.appendChild(d);
+    while (t.children.length > 40) t.removeChild(t.firstChild);
+    t.scrollIntoView({ behavior: "smooth", block: "nearest" });
     return d;
   }
   function clearTimeline() {
@@ -140,7 +142,10 @@
       timeline(`[dry-run] would call ${name} ${JSON.stringify(args).slice(0, 200)}`);
       return false;
     }
-    if (!T().needsApproval(name, mode)) return true;
+    if (!T().needsApproval(name, mode)) {
+      if (mode === "beast" || mode === "yolo") timeline(`⚙ ${name} — auto-approved (${mode})`);
+      return true;
+    }
     if (mode === "yolo") {
       if (yoloApproved) return true;
       const ok = await window.PuterUI.confirmModal(
@@ -166,8 +171,8 @@
   }
 
   function tokFooter(usage, fallbackText) {
-    if (usage) return `<div class="tok-foot">⚡ ${usage.in.toLocaleString()} in · ${usage.out.toLocaleString()} out</div>`;
-    return `<div class="tok-foot">⚡ ~${TK().fmt(TK().est(fallbackText))} tokens</div>`;
+    if (usage) return `<div class="tok-foot">⚡ this reply: ${usage.in.toLocaleString()} in · ${usage.out.toLocaleString()} out (exact)</div>`;
+    return `<div class="tok-foot">⚡ ~${TK().fmt(TK().est(fallbackText))} tokens this reply (est.)</div>`;
   }
 
   async function learnLast(fullText) {
@@ -269,11 +274,14 @@
       let exactUsage = null;
       for (;;) {
         if (stopFlag || activeGen !== gen) break;
-        if (++steps > 6) { timeline("tool budget (6) reached — answering with what I have."); break; }
-        timeline(`thinking (step ${steps}, ${base.model})…`);
+        if (steps >= 25) { timeline("25 tool steps reached — wrapping up with what I have."); break; }
+        steps++;
+        timeline(`thinking (step ${steps}/25, ${base.model})…`);
         const resp = await puter.ai.chat(working, { ...base, tools });
+        if (resp && resp.finish_reason === "length") timeline("⚠ output was cut by the model's limit — say 'continue' if the answer looks cut off");
         const u = TK().readUsage(resp);
-        if (u) { exactUsage = u; meter(u.in + u.out, true, M().contextWindow(base.model).size); }
+        if (u) exactUsage = u; // per-reply totals go to the message footer only
+        meter(TK().estMessages(working), false, M().contextWindow(base.model).size); // pill = context fill estimate
         if (resp && resp.compaction) pendingCompaction = { artifact: resp.compaction, text: M().extractText(resp) };
         const calls = M().toolCallsOf(resp);
         if (!calls.length) {
@@ -460,7 +468,7 @@
           body.classList.remove("streaming");
           display = present(full, prompt);
           renderAll(true);
-          meter(TK().est(prompt) + TK().est(full) + TK().est(think), !!usage, M().contextWindow(base.model).size);
+          meter(TK().est(prompt) + TK().est(full) + TK().est(think), false, M().contextWindow(base.model).size);
           history.push({ role: "user", content: prompt }, { role: "assistant", content: full });
           if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
@@ -477,7 +485,7 @@
     body.classList.remove("streaming");
     display = present(full, prompt);
     renderAll(true);
-    meter(TK().est(prompt) + TK().est(full), !!usage, M().contextWindow(base.model).size);
+    meter(TK().est(prompt) + TK().est(full), false, M().contextWindow(base.model).size);
     history.push({ role: "user", content: prompt }, { role: "assistant", content: full });
     if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
@@ -517,7 +525,7 @@
           history = working.filter((m) => m.role !== "system");
           if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
-          meter(TK().estMessages(working), !!usage, M().contextWindow(base.model).size);
+          meter(TK().estMessages(working), false, M().contextWindow(base.model).size);
           return;
         }
       } catch (e) {
@@ -536,7 +544,7 @@
     history = working.filter((m) => m.role !== "system");
     if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
-    meter(TK().estMessages(working), !!usage, M().contextWindow(base.model).size);
+    meter(TK().estMessages(working), false, M().contextWindow(base.model).size);
   }
 
   window.PuterAgent = {

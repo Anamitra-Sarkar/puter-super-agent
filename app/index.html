@@ -47,8 +47,8 @@
         <button class="chip suggest" data-prompt="/image A cozy cabin in the snow, warm light">🎨 /image something</button>
       </div>
     </div>
-    <div id="timeline" class="timeline"></div>
     <div id="chatLog" class="chat-log"></div>
+    <div id="timeline" class="timeline"></div>
     <div class="composer" id="composer">
       <div id="palette" class="palette hidden"><div id="paletteList"></div></div>
       <div id="queueRow" class="queue-row hidden"><span class="muted small">Queued:</span><span id="queueList"></span></div>
@@ -83,6 +83,7 @@
       <div id="dpane-preview" class="dock-pane active">
         <div id="previewDock">
           <iframe id="previewFrame" sandbox="allow-scripts" title="sandbox preview"></iframe>
+          <button id="btnPreviewExit" title="Exit fullscreen">✕</button>
           <pre id="previewLog" class="preview-log"></pre>
           <div class="row"><button id="btnPreviewFull" class="btn sm ghost">Fullscreen</button><button id="btnPreviewClear" class="btn sm ghost">Clear</button></div>
         </div>
@@ -115,7 +116,7 @@
   <div class="modal-card wide">
     <h3>⚙️ Settings &amp; skills</h3>
     <label class="side-label" style="margin-top:10px">Tool approval</label>
-    <select id="approvalMode"><option value="plan">Plan (dry-run)</option><option value="auto" selected>Auto (reads auto, writes ask)</option><option value="yolo">Yolo (ask once)</option></select>
+    <select id="approvalMode"><option value="plan">Plan (dry-run)</option><option value="auto" selected>Auto (reads auto, writes ask)</option><option value="yolo">Yolo (ask once per turn)</option><option value="beast">Beast (never ask — full auto)</option></select>
     <label class="side-label" style="margin-top:10px">System prompt (blank = default)</label>
     <textarea id="systemPrompt" rows="2" placeholder="Optional system instruction…"></textarea>
     <div style="margin-top:8px">

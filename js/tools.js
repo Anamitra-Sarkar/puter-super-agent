@@ -33,7 +33,7 @@
       type: "function",
       function: {
         name: "run_code_preview",
-        description: "Render HTML (optionally with inline JS/CSS) into the live sandbox preview panel so the user can SEE it. Pass full HTML document or snippet. Optionally pass path (e.g. index.html) to also save it into the Code tab codebase.",
+        description: "Render HTML (optionally with inline JS/CSS) into the live sandbox preview panel so the user can SEE it. Pass full HTML document or snippet. Optionally pass path (e.g. index.html) to also save it into the Code tab codebase. CRITICAL: always send the COMPLETE file content — never a partial/truncated file, never just the changed section. If output was cut off, say CONTINUE first and finish before previewing.",
         parameters: { type: "object", properties: { html: { type: "string" }, title: { type: "string" }, path: { type: "string" } }, required: ["html"] },
       },
       _kind: "write",
@@ -312,7 +312,7 @@
   }
 
   function needsApproval(toolName, approvalMode) {
-    if (approvalMode === "yolo") return false;
+    if (approvalMode === "beast" || approvalMode === "yolo") return false; // beast: never ask, not even once
     if (approvalMode === "plan") return true; // plan = dry-run everything
     const def = TOOLS.find((t) => t.function.name === toolName);
     if (!def) return true;

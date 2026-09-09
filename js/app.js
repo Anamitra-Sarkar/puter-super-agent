@@ -10,10 +10,11 @@
     update(used, win, exact) {
       this.used = used; this.win = win || this.win; this.exact = !!exact;
       const pct = Math.min(100, (used / this.win) * 100);
-      el("tokenText").textContent = `◉ ${exact ? "" : "~"}${window.PuterTokens.fmt(Math.round(used))} / ${window.PuterTokens.fmt(this.win)} · ${pct.toFixed(0)}%`;
+      el("tokenText").textContent = `◉ ~${window.PuterTokens.fmt(Math.round(used))} / ${window.PuterTokens.fmt(this.win)} · ${pct.toFixed(0)}%`;
       const fill = el("tokenFill");
       fill.style.width = pct + "%";
       const pill = el("tokenPill");
+      pill.title = "Context used incl. history (estimate). Exact per-reply counts sit under each answer.";
       pill.classList.toggle("warn", pct >= 70 && pct < 90);
       pill.classList.toggle("crit", pct >= 90);
     },
@@ -392,11 +393,25 @@
       sendCurrent(false);
     }));
 
-    // Sessions / preview leftovers
+    // Approval mode (persisted)
+    try {
+      const saved = localStorage.getItem("spa_approval");
+      if (saved && [...el("approvalMode").options].some((o) => o.value === saved)) el("approvalMode").value = saved;
+    } catch {}
+    el("approvalMode").onchange = (e) => {
+      try { localStorage.setItem("spa_approval", e.target.value); } catch {}
+      toast(e.target.value === "beast"
+        ? "Beast mode: agent runs everything, no permission popups"
+        : "Approval: " + e.target.value, "info");
+    };
     el("btnNewChat").onclick = () => { window.PuterSessions.newSession(); toast("New chat started", "info"); };
     el("btnExportSession").onclick = () => window.PuterSessions.export();
     el("btnPreviewClear").onclick = () => window.PuterSandbox.clear();
     el("btnPreviewFull").onclick = () => { const f = el("previewFrame"); if (f.requestFullscreen) f.requestFullscreen(); };
+    el("btnPreviewExit").onclick = () => { if (document.exitFullscreen) document.exitFullscreen(); };
+    document.addEventListener("fullscreenchange", () => {
+      el("btnPreviewExit").classList.toggle("show", !!document.fullscreenElement);
+    });
 
     // 402 fallback: one-click retry with nano (claude --fallback-model idea)
     document.addEventListener("click", (e) => {

@@ -419,13 +419,18 @@ select{border-radius:12px}
 .dock{position:sticky;top:53px;height:calc(100vh - 53px);width:0;min-width:0;opacity:0;overflow:hidden;
   background:var(--surface);border-left:1px solid transparent;z-index:40;display:flex;flex-direction:column;flex-shrink:0;
   transition:width .38s var(--ease),opacity .3s var(--ease),border-color .3s}
-.dock.open{width:480px;max-width:46vw;opacity:1;border-left-color:var(--line);
+.dock.open{width:60vw;max-width:60vw;opacity:1;border-left-color:var(--line);
   box-shadow:-20px 0 50px -20px rgba(28,25,23,.3)}
-.dock.open .dock-tabs,.dock.open .dock-pane{min-width:360px}
+.dock.open .dock-tabs,.dock.open .dock-pane{min-width:420px}
 @media(max-width:1100px){
   .dock{position:fixed;top:53px;right:0;bottom:0;height:auto}
-  .dock.open{width:min(460px,94vw);max-width:94vw}
+  .dock.open{width:min(620px,94vw);max-width:94vw}
 }
+#previewFrame:fullscreen{height:100%;border-radius:0}
+#btnPreviewExit{display:none;position:fixed;top:14px;right:14px;z-index:200;border-radius:50%!important;
+  width:42px;height:42px;padding:0!important;font-size:17px;background:#1C1917;color:#fff;border:none;cursor:pointer;
+  box-shadow:0 8px 24px rgba(0,0,0,.4)}
+#btnPreviewExit.show{display:block}
 .file-card{display:flex;gap:9px;align-items:center;background:var(--surface2);border:1px solid var(--line);
   border-radius:14px;padding:9px 13px;margin:9px 0;font-size:13px;flex-wrap:wrap;animation:msgIn .3s var(--ease)}
 .dock-tabs{display:flex;gap:4px;align-items:center;padding:10px 12px;border-bottom:1px solid var(--line)}

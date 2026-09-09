@@ -2,6 +2,7 @@
 (function () {
   const KEY = "spa_codebase_v1";
   let files = {}; // name -> {content, updated}
+  let revs = {}; // name -> [previous contents, newest-first], cap 5 — protects against truncated overwrites
   let active = null;
 
   function load() {
@@ -17,10 +18,35 @@
   }
   function put(name, content) {
     name = String(name || "untitled.txt").replace(/^\.\//, "").slice(0, 120);
-    files[name] = { content: String(content || ""), updated: Date.now() };
+    const next = String(content || "");
+    if (files[name] && files[name].content !== next) {
+      (revs[name] = revs[name] || []).unshift({ content: files[name].content, at: files[name].updated || Date.now() });
+      revs[name] = revs[name].slice(0, 5);
+      // Never replace a fuller file with a suspiciously truncated one silently:
+      if (next.length < files[name].content.length * 0.5) {
+        (revs[name]).unshift({ content: next, at: Date.now(), flagged: true });
+        // keep the fuller version live, stash the short one for inspection
+        save(); render();
+        if (window.PuterUI) window.PuterUI.toast(`Kept fuller ${name} — short update stashed in history`, "info");
+        return;
+      }
+    }
+    files[name] = { content: next, updated: Date.now() };
     active = name;
-    save();
-    render();
+    save(); render();
+  }
+  function undo(name) {
+    name = name || active;
+    const stack = revs[name];
+    if (!name || !stack || !stack.length) {
+      if (window.PuterUI) window.PuterUI.toast("No earlier revision", "info");
+      return;
+    }
+    const prev = stack.shift();
+    files[name] = { content: prev.content, updated: Date.now() };
+    active = name;
+    save(); render();
+    if (window.PuterUI) window.PuterUI.toast(`Restored previous ${name}${prev.flagged ? " (was a truncated update)" : ""}`, "ok");
   }
   function get(name) { return files[name || active]; }
   function names() { return Object.keys(files).sort(); }
@@ -107,14 +133,18 @@
     };
     const sv = document.createElement("button");
     sv.className = "btn sm"; sv.textContent = "Save";
-    bar.append(cp, dl, sv);
+    const un = document.createElement("button");
+    un.className = "btn sm ghost"; un.textContent = "↩ Undo";
+    un.title = "Restore previous revision (protects against truncated overwrites)";
+    bar.append(cp, dl, sv, un);
     const ta = document.createElement("textarea");
     ta.className = "code-editor";
     ta.value = f.content;
     ta.spellcheck = false;
     sv.onclick = () => { put(active, ta.value); window.PuterUI.toast("Saved " + active, "ok"); };
+    un.onclick = () => undo();
     view.append(bar, ta);
   }
   load();
-  window.PuterCodebase = { put, get, names, remove, clear, render, setActive, extractCode, getActive: () => active };
+  window.PuterCodebase = { put, get, names, remove, clear, render, setActive, undo, extractCode, getActive: () => active };
 })();
