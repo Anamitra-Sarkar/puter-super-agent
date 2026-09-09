@@ -4,7 +4,9 @@
     { name: "code", hint: "<task> — build with the coder skill + live preview" },
     { name: "swarm", hint: "<question> — ask 3 models in parallel + synthesis" },
     { name: "pipeline", hint: "<task> — planner → builder → critic" },
-    { name: "image", hint: "<prompt> — generate an image inline" },
+    { name: "image", hint: "<prompt> — generate (or attach an image to edit it)" },
+    { name: "video", hint: "<prompt> — generate a short AI video (takes minutes)" },
+    { name: "zip", hint: "— download the whole codebase as .zip" },
     { name: "vision", hint: "<question> — analyze the attached image" },
     { name: "speak", hint: "<text> — read aloud (OpenAI voice)" },
     { name: "browse", hint: "<url> — fetch + summarize a page" },
@@ -73,14 +75,50 @@
         if (!arg) return toast("Usage: /image <prompt>", "info"), true;
         window.PuterAgent.timeline("🎨 generating image…");
         try {
-          const img = await puter.ai.txt2img(arg, { model: "gpt-image-1-mini" });
+          const editImg = atts.find((a) => a.kind === "image");
+          let inputImage = null;
+          if (editImg && editImg.payload instanceof File) {
+            inputImage = await new Promise((res, rej) => {
+              const r = new FileReader();
+              r.onload = () => res(r.result);
+              r.onerror = rej;
+              r.readAsDataURL(editImg.payload);
+            });
+          }
+          const img = inputImage
+            ? await puter.ai.txt2img(arg, { model: "gpt-image-1-mini", input_image: inputImage })
+            : await puter.ai.txt2img(arg, { model: "gpt-image-1-mini" });
           img.style.maxWidth = "100%";
-          const body = window.PuterAgent.addMsg("assistant", `<p><b>🎨 ${arg.replace(/</g, "&lt;")}</b></p>`, "[image] " + arg);
+          const body = window.PuterAgent.addMsg("assistant", `<p><b>🎨 ${arg.replace(/</g, "&lt;")}</b>${editImg ? " (edited from attachment)" : ""}</p>`, "[image] " + arg);
           body.appendChild(img);
+          if (window.PuterCodebase && img.src && img.src.length < 250000) {
+            window.PuterCodebase.put("images/gen-" + Date.now() + ".png", img.src);
+          }
           toast("Image ready", "ok");
         } catch (e) {
           window.PuterAgent.addMsg("assistant", window.PuterUI.errorCard(e, "gpt-image-1-mini"));
         }
+        return true;
+      }
+      case "video": {
+        if (!arg) return toast("Usage: /video <prompt> (takes minutes, uses credits)", "info"), true;
+        window.PuterAgent.addMsg("user", "🎬 <b>/video</b> " + arg.replace(/</g, "&lt;"));
+        window.PuterAgent.timeline("🎬 generating video — this takes minutes, keep chatting…");
+        toast("Video generating in background", "info");
+        try {
+          const video = await puter.ai.txt2vid(arg);
+          video.setAttribute("controls", "");
+          video.style.maxWidth = "100%";
+          const body = window.PuterAgent.addMsg("assistant", `<p><b>🎬 ${arg.replace(/</g, "&lt;")}</b></p>`, "[video] " + arg);
+          body.appendChild(video);
+          toast("Video ready", "ok");
+        } catch (e) {
+          window.PuterAgent.addMsg("assistant", window.PuterUI.errorCard(e, "sora-2"));
+        }
+        return true;
+      }
+      case "zip": {
+        window.PuterFilegen.downloadCodebaseZip();
         return true;
       }
       case "vision": {
@@ -94,12 +132,17 @@
         const q = arg || "What do you see in this image?";
         window.PuterAgent.timeline("👁 analyzing image…");
         try {
-          const resp = await puter.ai.chat(q, media.payload, false, { model: el("modelSelect").value, normalize: true });
+          let vm = el("modelSelect").value;
+          if (!window.PuterModels.supportsVision(vm)) {
+            vm = window.PuterModels.VISION_FALLBACK;
+            window.PuterAgent.timeline(`(gpt-oss is text-only — analyzing with ${vm})`);
+          }
+          const resp = await puter.ai.chat(q, media.payload, false, { model: vm, normalize: true });
           const t = window.PuterModels.extractText(resp);
           window.PuterAgent.addMsg("user", "/vision " + q.replace(/</g, "&lt;"));
           window.PuterAgent.addMsg("assistant", window.PuterAgent.md(t), t);
         } catch (e) {
-          window.PuterAgent.addMsg("assistant", window.PuterUI.errorCard(e, el("modelSelect").value));
+          window.PuterAgent.addMsg("assistant", window.PuterUI.errorCard(e, "vision"));
         }
         return true;
       }

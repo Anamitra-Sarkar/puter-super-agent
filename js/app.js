@@ -218,8 +218,8 @@
       window.PuterLibrary.render();
       toast(ids.length ? `Merged ${ids.length} live models` : "Live list unavailable", ids.length ? "ok" : "err");
     };
-    const _apply = window.PuterLibrary.apply.bind(window.PuterLibrary);
-    window.PuterLibrary.apply = (id) => { _apply(id); paint(); };
+    const _apply = window.PuterLibrary.applyCombo.bind(window.PuterLibrary);
+    window.PuterLibrary.applyCombo = (fid, r, f) => { _apply(fid, r, f); paint(); };
     el("accountChip").onclick = (e) => { e.stopPropagation(); el("accountMenu").classList.toggle("hidden"); };
     document.onclick = () => el("accountMenu").classList.add("hidden");
     el("btnSignOut").onclick = async () => { await window.PuterAuth.signOut(); location.href = "../"; };
@@ -271,6 +271,44 @@
     };
     el("btnCodeClear").onclick = async () => {
       if (await window.PuterUI.confirmModal("Clear codebase?", "Removes all files from the Code tab.", "Clear")) window.PuterCodebase.clear();
+    };
+    el("btnCodeZip").onclick = () => window.PuterFilegen.downloadCodebaseZip();
+    // Mic → speech-to-text straight into the composer
+    let recorder = null, recChunks = [];
+    el("btnMic").onclick = async () => {
+      if (recorder) {
+        recorder.stop();
+        return;
+      }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recChunks = [];
+        recorder = new MediaRecorder(stream);
+        recorder.ondataavailable = (e) => { if (e.data.size) recChunks.push(e.data); };
+        recorder.onstop = async () => {
+          stream.getTracks().forEach((t) => t.stop());
+          recorder = null;
+          el("btnMic").classList.remove("rec");
+          const blob = new Blob(recChunks, { type: recorder.mimeType || "audio/webm" });
+          if (!blob.size) return;
+          toast("Transcribing…", "info");
+          try {
+            const out = await puter.ai.speech2txt(blob, { response_format: "text" });
+            const text = typeof out === "string" ? out : out.text || "";
+            if (text.trim()) {
+              el("userInput").value = (el("userInput").value + " " + text.trim()).trim();
+              el("userInput").focus();
+            } else toast("Heard nothing — try again", "err");
+          } catch (e) {
+            toast("Transcription failed: " + (e.message || e).slice(0, 120), "err");
+          }
+        };
+        recorder.start();
+        el("btnMic").classList.add("rec");
+        toast("Listening… tap 🎙 again to stop", "info");
+      } catch {
+        toast("Mic unavailable — check browser permission", "err");
+      }
     };
     el("btnSecretAdd").onclick = () => window.PuterSecrets.addFromInputs();
 

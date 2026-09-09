@@ -271,6 +271,12 @@ input[type=range]{accent-color:var(--accent);width:100%}
 .v-claude{background:#FBE3D8;color:var(--claude)}
 .lib-cost{font-size:11px;font-weight:700;color:var(--muted)}
 .lib-desc{font-size:12px;color:var(--muted);line-height:1.45}
+.lib-route{margin-top:4px;font-family:ui-monospace,monospace;font-size:11px}
+.seg{display:flex;gap:4px;margin-top:8px;background:var(--surface);border:1px solid var(--line-soft);border-radius:99px;padding:3px}
+.seg button{flex:1;border:none;background:none;border-radius:99px;padding:4px;font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit}
+.seg button.on{background:var(--ink);color:#FFF7ED}
+.fast-toggle{margin-top:7px;width:100%;border:1px dashed var(--line);background:none;border-radius:99px;padding:4px;font-size:11.5px;font-weight:700;color:var(--muted);cursor:pointer;font-family:inherit}
+.fast-toggle.on{background:#FFF4E0;border-color:#E9A13B;color:#9A5B00}
 
 /* Landing */
 .land-nav{display:flex;gap:18px;margin:0 auto}
@@ -348,6 +354,7 @@ select{border-radius:12px}
   background:var(--surface2);font-size:20px;line-height:1;cursor:pointer;color:var(--ink2);
   transition:all .18s var(--ease)}
 .attach-btn:hover{border-color:var(--accent);color:var(--accent-ink);transform:rotate(90deg)}
+.attach-btn.rec{background:var(--err);border-color:var(--err);color:#fff;animation:pulse 1.2s infinite;transform:none}
 .send-btn{flex-shrink:0;width:40px;height:40px;border-radius:50%!important;padding:0!important;
   font-size:17px;display:flex;align-items:center;justify-content:center}
 .send-btn.stop{background:var(--err)!important;border-color:var(--err)!important;font-size:13px;animation:pulse 1.4s infinite}

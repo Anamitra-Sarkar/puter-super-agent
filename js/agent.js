@@ -231,8 +231,12 @@
       lastTurn = { user: text, tools: [] };
       addMsg("user", md(text) + (attachments && attachments.length ? `<p class="muted">📎 ${attachments.length} attachment(s)</p>` : ""));
 
-      // Vision fast-path (single turn, no tools)
+      // Vision fast-path (single turn, no tools). Text-only models can't see: fall back.
       if (media) {
+        if (!M().supportsVision(base.model)) {
+          base.model = M().VISION_FALLBACK;
+          timeline(`(${model()} is text-only — analyzing with ${base.model})`);
+        }
         timeline(`vision via ${base.model} …`);
         await runSingle(text + textCtx, media.payload, base, streamOn);
         return true;
@@ -381,11 +385,23 @@
         a.play().catch(() => {});
         window.PuterUI.toast("Playing audio", "ok");
       },
-      onPreview: (html, title, path) => {
+      onPreview: async (html, title, path) => {
         if (path && window.PuterCodebase) window.PuterCodebase.put(path, html);
         window.PuterSandbox.render(html, title);
         if (window.PuterDock) window.PuterDock.open("preview");
-        window.PuterUI.toast("Preview opened", "ok");
+        window.PuterUI.toast("Preview opened — verifying…", "info");
+        timeline("🔍 verifying build (console · responsive · clicks · security · design)…");
+        await new Promise((r) => setTimeout(r, 1800)); // let the preview boot
+        let report = "";
+        try {
+          report = await window.PuterSandbox.verify(model());
+        } catch (e) {
+          report = "Verify harness error: " + (e.message || e);
+        }
+        const bad = /❌/.test(report);
+        timeline(bad ? "🔍 verify found issues — fixing…" : "🔍 verify: all checks green");
+        window.PuterUI.toast(bad ? "Issues found — agent is fixing" : "Build verified clean", bad ? "err" : "ok");
+        return "\n\n" + report;
       },
     };
   }

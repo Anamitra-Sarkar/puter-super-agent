@@ -50,6 +50,33 @@
     {
       type: "function",
       function: {
+        name: "make_file",
+        description: "Generate and download a file: zip (JSON map of filename->content), pdf, docx, pptx (slides split by lines containing only ---), tex/md/txt/html/csv/json (raw text).",
+        parameters: { type: "object", properties: { filename: { type: "string" }, content: { type: "string" } }, required: ["filename", "content"] },
+      },
+      _kind: "write",
+    },
+    {
+      type: "function",
+      function: {
+        name: "fetch_file",
+        description: "Download any public file (data, image, doc) via CORS-free fetch and save it into the Code tab codebase and optionally Puter cloud storage. No restrictions beyond public URLs.",
+        parameters: { type: "object", properties: { url: { type: "string" }, saveAs: { type: "string" }, toCloud: { type: "boolean" } }, required: ["url", "saveAs"] },
+      },
+      _kind: "write",
+    },
+    {
+      type: "function",
+      function: {
+        name: "extract_text",
+        description: "Cheap OCR: extract raw printed/handwritten text from an image or multi-page PDF (URL or codebase path). Use for scans, receipts, documents. For questions ABOUT an image, analyze it with vision instead.",
+        parameters: { type: "object", properties: { source: { type: "string" } }, required: ["source"] },
+      },
+      _kind: "read",
+    },
+    {
+      type: "function",
+      function: {
         name: "memory_write",
         description: "Append an important fact to persistent MEMORY.md (decisions, file paths, credentials locations, things that must survive compaction). Keep it short.",
         parameters: { type: "object", properties: { entry: { type: "string" } }, required: ["entry"] },
@@ -138,8 +165,9 @@
         return "Audio played in the Speech tab.";
       }
       case "run_code_preview": {
-        if (ctx && ctx.onPreview) ctx.onPreview(args.html, args.title, args.path);
-        return "Preview rendered in the sandbox panel." + (args.path ? " Saved to codebase as " + args.path + "." : "");
+        let extra = "";
+        if (ctx && ctx.onPreview) extra = await ctx.onPreview(args.html, args.title, args.path);
+        return "Preview rendered in the sandbox panel." + (args.path ? " Saved to codebase as " + args.path + "." : "") + (extra || "");
       }
       case "get_secret": {
         const v = window.PuterSecrets ? window.PuterSecrets.get(args.name) : undefined;
@@ -166,6 +194,39 @@
       case "kv_recall": {
         const v = await puter.kv.get("agentmem_" + args.key);
         return v == null ? "(nothing stored)" : String(v);
+      }
+      case "make_file": {
+        return await window.PuterFilegen.makeFile(args.filename, args.content);
+      }
+      case "fetch_file": {
+        const r = await puter.net.fetch(args.url);
+        if (!r.ok) throw new Error("fetch failed: HTTP " + r.status);
+        const buf = await r.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        const mime = (r.headers.get("content-type") || "application/octet-stream").split(";")[0];
+        const name = String(args.saveAs || "download.bin").slice(0, 120);
+        const looksText = /^text\/|json|javascript|xml|csv/.test(mime) || /\.(txt|md|csv|json|js|ts|py|html|css|tex)$/i.test(name);
+        if (window.PuterCodebase) {
+          if (looksText) {
+            window.PuterCodebase.put(name, new TextDecoder().decode(buf).slice(0, 300000));
+          } else {
+            let b64 = "";
+            const CH = 32768;
+            for (let i = 0; i < bytes.length && b64.length < 240000; i += CH) {
+              b64 += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+            }
+            window.PuterCodebase.put(name, `data:${mime};base64,${btoa(b64)}`);
+          }
+        }
+        if (args.toCloud) await puter.fs.write(name, new Blob([buf], { type: mime }));
+        return `Downloaded ${args.url} (${buf.byteLength} bytes) → codebase as ${name}` + (args.toCloud ? " + Puter cloud" : "");
+      }
+      case "extract_text": {
+        let src = args.source;
+        const cb = window.PuterCodebase && window.PuterCodebase.get(args.source);
+        if (cb && /^data:/.test(cb.content)) src = cb.content;
+        const text = await puter.ai.img2txt(src);
+        return String(text).slice(0, 12000) || "(no text found in image)";
       }
       case "memory_read": {
         const m = window.PuterMemory ? await window.PuterMemory.load() : "";

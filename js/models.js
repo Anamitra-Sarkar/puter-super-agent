@@ -58,13 +58,61 @@
     "claude-opus-4-5": "$$$", "claude-sonnet-4-5": "$$",
     "claude-haiku-4-5": "$", "claude-opus-4": "$$$", "claude-sonnet-4": "$$",
   };
+  // ---- Model families: one card per family, Low/High (+Fast) route to real IDs ----
+  // Low = cheapest/smallest sibling (avoids 402s), High = pro/flagship sibling.
   const DEFAULT_MODEL = "gpt-5.4-nano";
-  function costOf(id) { return COST[id] || "$"; }
+  const FAMILIES = [
+    { id: "luna", name: "Luna", vendor: "OpenAI", desc: "Fast, cheap everyday work", low: "gpt-5.6-luna", high: "gpt-5.6-luna-pro" },
+    { id: "haiku", name: "Haiku", vendor: "Claude", desc: "Fastest, cheapest Claude", single: "claude-haiku-4-5" },
+    { id: "gpt54", name: "GPT-5.4", vendor: "OpenAI", desc: "General purpose, nano-cheap to pro", low: "gpt-5.4-nano", high: "gpt-5.4-pro" },
+    { id: "terra", name: "Terra", vendor: "OpenAI", desc: "Balanced mid-tier", low: "gpt-5.6-terra", high: "gpt-5.6-terra-pro" },
+    { id: "sonnet", name: "Sonnet", vendor: "Claude", desc: "Balanced reasoning + coding", low: "claude-sonnet-4-5", high: "claude-sonnet-5" },
+    { id: "sol", name: "Sol", vendor: "OpenAI", desc: "Flagship GPT-5.6", low: "gpt-5.6-sol", high: "gpt-5.6-sol-pro" },
+    { id: "gpt55", name: "GPT-5.5", vendor: "OpenAI", desc: "Previous-gen generalist", low: "gpt-5.5", high: "gpt-5.5-pro" },
+    { id: "opus", name: "Opus", vendor: "Claude", desc: "Heaviest Claude reasoning", low: "claude-opus-4-8", high: "claude-opus-5", fastLow: "claude-opus-4.8-fast", fastHigh: "claude-opus-5-fast" },
+    { id: "astra", name: "Astra", vendor: "OpenAI", desc: "Frontier reasoning + coding + computer use", low: "gpt-6-astra", high: "gpt-6-astra-pro" },
+    { id: "fable", name: "Fable", vendor: "Claude", desc: "Multi-step agentic reasoning", low: "claude-fable-5", high: "claude-fable-5-1" },
+    { id: "codex", name: "Codex", vendor: "OpenAI", desc: "Code generation specialist", single: "openai/gpt-5.3-codex" },
+    { id: "oss", name: "GPT-OSS", vendor: "OpenAI", desc: "Open-source reasoning family", single: "openai/gpt-oss-120b" },
+  ];
+  const FAM_KEY = "spa_fam";
+  function resolveFamily(fid, reasoning, fast) {
+    const f = FAMILIES.find((x) => x.id === fid) || FAMILIES[0];
+    if (f.single) return f.single;
+    if (fast && (f.fastLow || f.fastHigh)) return reasoning === "high" ? (f.fastHigh || f.fastLow) : (f.fastLow || f.fastHigh);
+    return reasoning === "high" ? (f.high || f.low) : (f.low || f.high);
+  }
+  function familyOf(modelId) {
+    for (const f of FAMILIES) {
+      if (f.single === modelId || f.low === modelId || f.high === modelId || f.fastLow === modelId || f.fastHigh === modelId) return f;
+    }
+    return null;
+  }
+  function famState() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(FAM_KEY) || "{}");
+      if (raw && raw.fid) return { fid: raw.fid, reasoning: raw.reasoning === "high" ? "high" : "low", fast: !!raw.fast };
+    } catch {}
+    return { fid: "luna", reasoning: "low", fast: false };
+  }
+  function setFamState(s) {
+    try { localStorage.setItem(FAM_KEY, JSON.stringify(s)); } catch {}
+  }
+  function costOf(id) {
+    return COST[id] || (/-fast$/.test(id || "") ? "$$$" : "$");
+  }
 
   // Reasoning effort is OpenAI-only per Puter docs (Claude ignores it).
   function supportsEffort(id) {
-    return /^(gpt-|openai\/)/i.test(id || "");
+    return /^(gpt-|openai\/)/i.test(id || "") && !/gpt-oss/i.test(id || "");
   }
+  // Only gpt-oss is text-only; every other chat model here is multimodal (vision encoder).
+  // OCR (img2txt) is NOT vision — it is a cheap text extractor for scans/PDFs.
+  const TEXT_ONLY = [/gpt-oss/i];
+  function supportsVision(id) {
+    return !TEXT_ONLY.some((re) => re.test(id || ""));
+  }
+  const VISION_FALLBACK = "gpt-5.6-luna"; // cheap multimodal stand-in when current model is text-only
   // Context windows: exact only where documented (astra 1.05M per OpenAI listing);
   // everything else is a conservative estimate -> always displayed with "~".
   const CONTEXT = { "gpt-6-astra": 1050000, "gpt-6-astra-pro": 1050000 };
@@ -116,5 +164,5 @@
     }
   }
 
-  window.PuterModels = { OPENAI_CHAT, CLAUDE, META, optionGroups, describe, extractText, toolCallsOf, liveModelIds, costOf, DEFAULT_MODEL, supportsEffort, contextWindow };
+  window.PuterModels = { OPENAI_CHAT, CLAUDE, META, optionGroups, describe, extractText, toolCallsOf, liveModelIds, costOf, DEFAULT_MODEL, supportsEffort, supportsVision, VISION_FALLBACK, contextWindow, FAMILIES, resolveFamily, familyOf, famState, setFamState };
 })();

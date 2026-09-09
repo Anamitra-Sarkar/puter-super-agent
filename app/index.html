@@ -64,6 +64,7 @@
         <button id="btnAttach" class="attach-btn" title="Attach files">+</button>
         <input type="file" id="fileInput" class="hidden" multiple />
         <textarea id="userInput" rows="1" placeholder="Ask anything…  ( / for commands · Enter send · ⇧↵ newline · ⌃↵ send now )"></textarea>
+        <button id="btnMic" class="attach-btn" title="Voice input (speech → text)">🎙</button>
         <button id="btnSend" class="btn primary send-btn" title="Send">→</button>
       </div>
       <div class="composer-meta">
@@ -89,6 +90,7 @@
       <div id="dpane-code" class="dock-pane">
         <div class="row">
           <button id="btnCodeUpload" class="btn sm">+ Upload to codebase</button>
+          <button id="btnCodeZip" class="btn sm">⬇ ZIP</button>
           <input type="file" id="codeFileInput" class="hidden" multiple />
           <button id="btnCodeClear" class="btn sm ghost">Clear all</button>
         </div>
@@ -178,6 +180,7 @@
 <script src="../js/memory.js"></script>
 <script src="../js/codebase.js"></script>
 <script src="../js/secrets.js"></script>
+<script src="../js/filegen.js"></script>
 <script src="../js/sandbox.js"></script>
 <script src="../js/agent.js"></script>
 <script src="../js/swarm.js"></script>
