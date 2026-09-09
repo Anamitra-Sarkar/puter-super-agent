@@ -6,26 +6,34 @@
 <title>Puter Super-Agent — OpenAI + Claude Chat</title>
 <script src="https://js.puter.com/v2/"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+<header id="topbar">
+  <div class="brand"><span class="brand-dot"></span><span>Puter Super-Agent</span><span class="brand-tag">OpenAI + Claude · keyless</span></div>
+  <div class="top-right">
+    <span id="statusPill" class="pill">connecting…</span>
+    <button id="btnSignIn" class="btn primary sm">Sign in</button>
+    <button id="btnSignOut" class="btn ghost sm">Sign out</button>
+  </div>
+</header>
+
 <div id="app">
   <aside id="sidebar">
-    <div class="brand">⚡ Puter Super-Agent</div>
     <div class="side-section">
-      <label class="side-label">Auth</label>
+      <label class="side-label">Account &amp; usage</label>
       <div id="authBox" class="auth-box">Checking sign-in…</div>
-      <div class="row">
-        <button id="btnSignIn" class="btn small">Sign in</button>
-        <button id="btnSignOut" class="btn small ghost">Sign out</button>
-      </div>
+      <div id="usageBox" class="usage-box">Usage: —</div>
     </div>
     <div class="side-section">
-      <label class="side-label" for="modelSelect">Model (all free via Puter)</label>
+      <label class="side-label" for="modelSelect">Model <span class="cost-legend">$ cheap · $$$ premium</span></label>
       <select id="modelSelect"></select>
       <div id="modelMeta" class="model-meta"></div>
       <div class="row">
-        <button id="btnRefreshModels" class="btn small ghost" title="Refresh live model list from Puter">↻ live list</button>
+        <button id="btnRefreshModels" class="btn ghost sm" title="Refresh live model list from Puter">↻ live list</button>
       </div>
     </div>
     <div class="side-section grid2">
@@ -69,8 +77,8 @@
     <div class="side-section">
       <label class="side-label">Sessions</label>
       <div class="row">
-        <button id="btnNewChat" class="btn small">+ New</button>
-        <button id="btnExportSession" class="btn small ghost">Export</button>
+        <button id="btnNewChat" class="btn sm">+ New</button>
+        <button id="btnExportSession" class="btn ghost sm">Export</button>
       </div>
       <div id="sessionList" class="session-list"></div>
     </div>
@@ -90,17 +98,28 @@
     </nav>
 
     <section id="tab-chat" class="panel active">
+      <div id="emptyState" class="hero">
+        <div class="hero-badge">✨ All OpenAI + Claude models · free via Puter</div>
+        <h1>What should we build today?</h1>
+        <p class="muted">Pick a model on the left, or fire a 3-model swarm. Start cheap — upgrade to Astra/Opus when it matters.</p>
+        <div class="chips">
+          <button class="chip suggest" data-prompt="Build a landing page for a coffee brand. Show me the preview.">☕ Landing page + preview</button>
+          <button class="chip suggest" data-prompt="Compare: should I use GPT-5.6 Sol or Claude Sonnet 5 for a coding agent?">⚖️ Compare two models</button>
+          <button class="chip suggest" data-prompt="Fetch https://example.com and summarize what it says.">🌐 Fetch + summarize a page</button>
+          <button class="chip suggest" data-prompt="Write a haiku about monsoons.">🍃 Write a haiku</button>
+        </div>
+      </div>
       <div id="timeline" class="timeline"></div>
       <div id="chatLog" class="chat-log"></div>
       <div class="composer">
         <div class="attach-row">
           <input type="file" id="fileInput" multiple />
-          <span id="attachHint" class="hint">images → vision · txt/md/pdf → context</span>
+          <span id="attachHint" class="hint">images → vision · txt/md/code → context</span>
         </div>
         <div class="composer-row">
           <textarea id="userInput" rows="3" placeholder="Ask anything… (Enter to send, Shift+Enter newline)"></textarea>
           <div class="composer-btns">
-            <button id="btnSend" class="btn primary">Send</button>
+            <button id="btnSend" class="btn primary">Send →</button>
             <button id="btnStop" class="btn ghost" disabled>Stop</button>
           </div>
         </div>
@@ -130,7 +149,7 @@
     </section>
 
     <section id="tab-image" class="panel">
-      <h2>Image generation (GPT Image)</h2>
+      <h2>Image generation <span class="tag">GPT Image</span></h2>
       <div class="row">
         <input id="imgPrompt" placeholder="A futuristic cityscape at night…" />
         <select id="imgModel">
@@ -157,7 +176,7 @@
     </section>
 
     <section id="tab-speech" class="panel">
-      <h2>Text to speech (OpenAI via Puter)</h2>
+      <h2>Text to speech <span class="tag">OpenAI via Puter</span></h2>
       <div class="row">
         <select id="ttsModel"><option value="gpt-4o-mini-tts" selected>gpt-4o-mini-tts</option><option value="tts-1">tts-1</option><option value="tts-1-hd">tts-1-hd</option></select>
         <select id="ttsVoice"><option value="alloy" selected>alloy</option><option value="echo">echo</option><option value="fable">fable</option><option value="nova">nova</option><option value="onyx">onyx</option><option value="shimmer">shimmer</option></select>
@@ -180,7 +199,7 @@
     </section>
 
     <section id="tab-browser" class="panel">
-      <h2>Browser (CORS-free fetch + preview)</h2>
+      <h2>Browser <span class="tag">CORS-free fetch + preview</span></h2>
       <div class="row">
         <input id="browserUrl" placeholder="https://example.com" value="https://example.com" />
         <button id="btnFetch" class="btn">Fetch</button>
@@ -204,17 +223,31 @@
     <section id="previewDock">
       <div class="preview-head">
         <strong>Live sandbox preview</strong>
-        <span class="muted">agent HTML/JS runs here visibly (Manus-style)</span>
+        <span class="muted">agent HTML/JS runs here visibly</span>
         <span class="spacer"></span>
-        <button id="btnPreviewFull" class="btn small ghost">Open fullscreen</button>
-        <button id="btnPreviewClear" class="btn small ghost">Clear</button>
+        <button id="btnPreviewFull" class="btn sm ghost">Open fullscreen</button>
+        <button id="btnPreviewClear" class="btn sm ghost">Clear</button>
       </div>
       <iframe id="previewFrame" sandbox="allow-scripts" title="sandbox preview"></iframe>
       <pre id="previewLog" class="preview-log"></pre>
     </section>
   </main>
 </div>
+
+<div id="toasts" aria-live="polite"></div>
+<div id="modalWrap" class="modal-wrap hidden">
+  <div class="modal-card">
+    <h3 id="modalTitle">Confirm</h3>
+    <div id="modalBody" class="modal-body"></div>
+    <div class="modal-btns">
+      <button id="modalCancel" class="btn ghost">Cancel</button>
+      <button id="modalOk" class="btn primary">Allow</button>
+    </div>
+  </div>
+</div>
+
 <script src="js/models.js"></script>
+<script src="js/ui.js"></script>
 <script src="js/tools.js"></script>
 <script src="js/sandbox.js"></script>
 <script src="js/agent.js"></script>

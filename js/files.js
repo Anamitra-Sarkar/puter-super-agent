@@ -28,7 +28,8 @@
       if (!media) { out.textContent = "Provide an image URL or file."; return; }
       const resp = await puter.ai.chat(q, media, false, { model, normalize: true });
       out.innerHTML = window.PuterAgent.md(window.PuterModels.extractText(resp));
-    } catch (e) { out.innerHTML = "<b>Error:</b> " + esc(e.message || e); }
+      window.PuterUI.toast("Vision analysis done", "ok");
+    } catch (e) { out.innerHTML = "<b>Error:</b> " + esc(e.message || e); window.PuterUI.toast("Vision failed", "err"); }
   }
 
   async function doTTS() {
@@ -40,7 +41,8 @@
       out.innerHTML = "";
       out.appendChild(audio);
       audio.play().catch(() => {});
-    } catch (e) { out.innerHTML = "<b>Error:</b> " + esc(e.message || e); }
+      window.PuterUI.toast("Playing audio", "ok");
+    } catch (e) { out.innerHTML = "<b>Error:</b> " + esc(e.message || e); window.PuterUI.toast("Speech failed", "err"); }
   }
 
   async function doGenImg() {
@@ -50,7 +52,8 @@
       img.style.maxWidth = "100%";
       out.innerHTML = "";
       out.appendChild(img);
-    } catch (e) { out.innerHTML = "<b>Error:</b> " + esc(e.message || e); }
+      window.PuterUI.toast("Image generated", "ok");
+    } catch (e) { out.innerHTML = "<b>Error:</b> " + esc(e.message || e); window.PuterUI.toast("Image failed — see panel", "err"); }
   }
 
   async function doFetch(summarize) {
@@ -88,8 +91,8 @@
     const out = el("fsOut");
     const p = el("fsPath").value.trim();
     if (!p) { out.textContent = "Enter a path first."; return; }
-    try { await puter.fs.write(p, el("fsBody").value); out.textContent = "Wrote " + p; }
-    catch (e) { out.textContent = "Error: " + (e.message || e); }
+    try { await puter.fs.write(p, el("fsBody").value); out.textContent = "Wrote " + p; window.PuterUI.toast("Wrote " + p, "ok"); }
+    catch (e) { out.textContent = "Error: " + (e.message || e); window.PuterUI.toast("Write failed", "err"); }
   }
 
   window.PuterFiles = { readAttachments, doVision, doTTS, doGenImg, doFetch, fsList, fsRead, fsWrite };

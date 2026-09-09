@@ -27,7 +27,8 @@
       }
       const url = `https://${site.subdomain}.puter.site`;
       out.innerHTML = `Live: <a href="${url}" target="_blank" rel="noopener">${url}</a><br>Worker: <a href="${url}/__workers/api/health" target="_blank" rel="noopener">${url}/__workers/api/health</a>`;
-    } catch (e) { out.innerHTML = "<b>Deploy failed:</b> " + esc(e.message || e); }
+      window.PuterUI.toast("Deployed to " + url, "ok");
+    } catch (e) { out.innerHTML = "<b>Deploy failed:</b> " + esc(e.message || e); window.PuterUI.toast("Deploy failed", "err"); }
   }
 
   async function workerHealth() {
@@ -37,8 +38,10 @@
     out.textContent = "Checking worker…";
     try {
       const r = await fetch(`https://${sub}.puter.site/__workers/api/health`);
-      out.textContent = `GET /__workers/api/health → ${r.status}\n` + (await r.text()).slice(0, 2000);
-    } catch (e) { out.textContent = "Worker check failed: " + (e.message || e); }
+      const body = (await r.text()).slice(0, 2000);
+      out.textContent = `GET /__workers/api/health → ${r.status}\n` + body;
+      window.PuterUI.toast(r.ok ? "Worker is healthy" : "Worker returned " + r.status, r.ok ? "ok" : "err");
+    } catch (e) { out.textContent = "Worker check failed: " + (e.message || e); window.PuterUI.toast("Worker check failed", "err"); }
   }
 
   const WORKER_SRC = `router.get("/health", async () => ({ ok: true, at: Date.now() }));

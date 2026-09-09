@@ -16,6 +16,8 @@
     return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
   }
   function addMsg(role, html, raw) {
+    const hero = document.getElementById("emptyState");
+    if (hero) hero.classList.add("bye");
     const log = el("chatLog");
     const d = document.createElement("div");
     d.className = "msg " + role;
@@ -65,11 +67,17 @@
     if (!T().needsApproval(name, mode)) return true;
     if (mode === "yolo") {
       if (yoloApproved) return true;
-      const ok = confirm("Yolo mode: allow ALL tool calls for this turn?\nFirst: " + name);
+      const ok = await window.PuterUI.confirmModal(
+        "Yolo mode: allow all tool calls this turn?",
+        "First call:\n" + name + "\n" + JSON.stringify(args, null, 1).slice(0, 600),
+        "Allow all");
       yoloApproved = ok;
       return ok;
     }
-    return confirm(`Agent wants to call:\n${name}\n${JSON.stringify(args, null, 1).slice(0, 800)}\n\nAllow?`);
+    return window.PuterUI.confirmModal(
+      "Agent wants to call a tool",
+      name + "\n" + JSON.stringify(args, null, 1).slice(0, 800),
+      "Allow");
   }
 
   /** Non-streaming tool loop (max 6 steps), then streams the final answer. */
@@ -138,9 +146,9 @@
           const tick = timeline(`⚙ ${name} …`);
           try {
             const out = await T().execute(name, args, {
-              onImage: (img, p) => { const o = document.getElementById("imgOut"); o.prepend(img); timeline("image shown in Image tab"); },
-              onAudio: (a) => { const o = document.getElementById("ttsOut"); o.innerHTML = ""; a.setAttribute("controls", ""); o.appendChild(a); a.play().catch(() => {}); },
-              onPreview: (html, title) => window.PuterSandbox.render(html, title),
+              onImage: (img, p) => { const o = document.getElementById("imgOut"); o.prepend(img); timeline("image shown in Image tab"); window.PuterUI.toast("Image ready — see Image tab", "ok"); },
+              onAudio: (a) => { const o = document.getElementById("ttsOut"); o.innerHTML = ""; a.setAttribute("controls", ""); o.appendChild(a); a.play().catch(() => {}); window.PuterUI.toast("Playing audio", "ok"); },
+              onPreview: (html, title) => { window.PuterSandbox.render(html, title); window.PuterUI.toast("Preview rendered below", "ok"); },
             });
             messages.push({ role: "tool", tool_call_id: c.id || c.tool_call_id, content: String(out).slice(0, 12000) });
             tick.textContent = `⚙ ${name} — done`;
@@ -155,18 +163,21 @@
       const last = await puter.ai.chat(messages, { ...base, stream });
       if (stream && last && typeof last[Symbol.asyncIterator] === "function") {
         const body = addMsg("assistant", "", "");
+        body.classList.add("streaming");
         let full = "";
         for await (const part of last) {
           if (stopFlag) break;
           if (part && part.text) { full += part.text; body.innerHTML = md(full); }
         }
+        body.classList.remove("streaming");
         window.PuterSessions && window.PuterSessions.note("assistant", full);
       } else {
         const finalText = M().extractText(last);
         addMsg("assistant", md(finalText), finalText);
       }
     } catch (e) {
-      addMsg("assistant", `<b>Error:</b> ${escapeHtml((e && e.message) || e)}<p class="muted">Tip: sign in (User-Pays) if you see auth/balance errors. OpenAI web_search needs an OpenAI model.</p>`);
+      addMsg("assistant", window.PuterUI.errorCard(e, (typeof base !== "undefined" && base.model) || el("modelSelect").value));
+      window.PuterUI.toast("Request failed — see error card", "err");
     } finally {
       el("btnStop").disabled = true;
     }
@@ -180,6 +191,8 @@
 
   async function streamOrNot(promptOrMsgs, mediaPayload, base, stream) {
     const body = addMsg("assistant", "", "");
+    body.classList.add("streaming");
+    const done = () => body.classList.remove("streaming");
     if (stream) {
       try {
         const call = mediaPayload
@@ -194,6 +207,7 @@
             if (t) { full += t; body.innerHTML = md(full); }
           }
           window.PuterSessions && window.PuterSessions.note("assistant", full);
+          done();
           return body;
         }
       } catch (e) {
@@ -206,6 +220,7 @@
     const text = M().extractText(resp);
     body.innerHTML = md(text);
     window.PuterSessions && window.PuterSessions.note("assistant", text);
+    done();
     return body;
   }
 

@@ -41,6 +41,26 @@
   OPENAI_CHAT.forEach(([id, d]) => (META[id] = { vendor: "OpenAI", desc: d }));
   CLAUDE.forEach(([id, d]) => (META[id] = { vendor: "Claude", desc: d }));
 
+  // Cost tiers drive the $ labels and the cheap-first default (avoids 402s).
+  const COST = {
+    "gpt-6-astra": "$$$", "gpt-6-astra-pro": "$$$",
+    "gpt-5.6-sol": "$$", "gpt-5.6-sol-pro": "$$",
+    "gpt-5.6-terra": "$", "gpt-5.6-terra-pro": "$",
+    "gpt-5.6-luna": "$", "gpt-5.6-luna-pro": "$",
+    "gpt-5.5": "$$", "gpt-5.5-pro": "$$$",
+    "gpt-5.4": "$", "gpt-5.4-mini": "$", "gpt-5.4-nano": "$", "gpt-5.4-pro": "$$",
+    "gpt-5.2": "$", "openai/gpt-5.3-codex": "$$", "openai/gpt-oss-120b": "$",
+    "claude-fable-5-1": "$$$", "claude-fable-5": "$$$",
+    "claude-opus-5": "$$$", "claude-opus-5-fast": "$$$",
+    "claude-sonnet-5": "$$",
+    "claude-opus-4-8": "$$$", "claude-opus-4.8-fast": "$$$", "claude-opus-4-7": "$$$",
+    "claude-sonnet-4-6": "$$", "claude-opus-4-6": "$$$",
+    "claude-opus-4-5": "$$$", "claude-sonnet-4-5": "$$",
+    "claude-haiku-4-5": "$", "claude-opus-4": "$$$", "claude-sonnet-4": "$$",
+  };
+  const DEFAULT_MODEL = "gpt-5.4-nano";
+  function costOf(id) { return COST[id] || "$"; }
+
   function optionGroups() {
     return [
       { label: "OpenAI", ids: OPENAI_CHAT.map((x) => x[0]) },
@@ -84,5 +104,5 @@
     }
   }
 
-  window.PuterModels = { OPENAI_CHAT, CLAUDE, META, optionGroups, describe, extractText, toolCallsOf, liveModelIds };
+  window.PuterModels = { OPENAI_CHAT, CLAUDE, META, optionGroups, describe, extractText, toolCallsOf, liveModelIds, costOf, DEFAULT_MODEL };
 })();
