@@ -2,7 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<meta name="theme-color" content="#F6F4EE" />
+<meta name="description" content="Chat with all OpenAI and Claude models. Keyless via Puter." />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<link rel="manifest" href="../manifest.webmanifest" />
+<link rel="apple-touch-icon" href="../icons/icon-192.png" />
+<link rel="icon" type="image/png" href="../icons/icon-192.png" />
 <title>App — Puter Super-Agent</title>
 <script src="https://js.puter.com/v2/"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
@@ -17,6 +25,7 @@
   <button id="modelPill" class="model-pill" title="Choose model">🧠 <span id="modelPillLabel">…</span> ▾</button>
   <span id="statusPill" class="pill">checking…</span>
   <div class="top-right">
+    <button id="btnTemplates" class="btn ghost sm" title="Templates for everyday tasks">📚</button>
     <button id="btnDock" class="btn ghost sm" title="Toggle workspace dock (preview / code / secrets)">👁</button>
     <button id="btnMemory" class="btn ghost sm" title="Agent memory (MEMORY.md)">🧠</button>
     <button id="btnHistory" class="btn ghost sm" title="Chat history">🕘</button>
@@ -25,6 +34,7 @@
       <button id="accountChip" class="account-chip"><span id="accountAvatar" class="avatar">?</span><span id="accountName">…</span> ▾</button>
       <div id="accountMenu" class="menu hidden">
         <div class="menu-head"><b id="accountName2">…</b><div id="accountUsage" class="muted small">Usage: —</div></div>
+        <button id="btnDataControls" class="btn ghost sm" style="width:100%">🔒 My data & privacy</button>
         <button id="btnSignOut" class="btn ghost sm" style="width:100%">Sign out</button>
       </div>
     </div>
@@ -111,6 +121,9 @@
   <div class="drawer-head"><b>🕘 History</b><button id="btnHistoryClose" class="btn sm ghost">✕</button></div>
   <div class="row"><button id="btnNewChat" class="btn sm">+ New chat</button><button id="btnExportSession" class="btn ghost sm">Export</button></div>
   <div id="sessionList" class="session-list"></div>
+  <div class="drawer-head" style="margin-top:12px"><b>📝 Notes</b></div>
+  <div class="row"><input id="notesSearch" placeholder="Search notes…" /></div>
+  <div id="notesList" class="session-list"></div>
 </div>
 
 <div id="settingsModal" class="modal-wrap hidden">
@@ -124,12 +137,12 @@
       <label class="chk"><input type="checkbox" id="streamToggle" checked /> Stream responses</label>
       <label class="chk"><input type="checkbox" id="webSearchToggle" /> Web search (OpenAI models)</label>
     </div>
+    <label class="side-label" style="margin-top:10px">Monthly token budget (blank = off)</label>
+    <div class="row"><input id="budgetInput" type="number" min="1000" step="1000" placeholder="e.g. 500000" /></div>
+    <p class="muted small">Warns at 80%, asks at 100%. Tracked on this device.</p>
     <h3 style="margin-top:14px">🎯 Skills <span class="tag">toggle several</span></h3>
     <p class="muted small">Toggle skills on/off — all active ones steer the AI together. Create your own below.</p>
     <div id="skillList"></div>
-    <div class="row"><input id="skillId" placeholder="id e.g. sql-expert" /><input id="skillName" placeholder="Name" /></div>
-    <div class="row"><input id="skillPrompt" placeholder="System prompt for this skill…" /></div>
-    <div class="row"><button id="btnSkillSave" class="btn primary sm">Save skill</button></div>
     <div class="modal-btns"><button id="btnSettingsClose" class="btn primary">Done</button></div>
   </div>
 </div>
@@ -159,6 +172,32 @@
   </div>
 </div>
 
+<div id="onboardOverlay" class="overlay hidden">
+  <div class="overlay-card narrow">
+    <h3>👋 Welcome to Super-Agent</h3>
+    <div class="onb-step"><b>1 · You're signed in</b><p class="muted small">AI usage bills to your own Puter allowance — no keys, nothing to configure.</p></div>
+    <div class="onb-step"><b>2 · Pick a model family</b><p class="muted small">Tap 🧠 up top. Start cheap (Luna/Haiku on Low), go High for hard tasks.</p></div>
+    <div class="onb-step"><b>3 · Type <code>/</code> for powers</b><p class="muted small">/plan, /swarm, /image, /code, /video… or just chat normally.</p></div>
+    <label class="chk"><input type="checkbox" id="onboardHide" /> Don't show again</label>
+    <div class="modal-btns"><button id="btnOnboardGo" class="btn primary">Start chatting →</button></div>
+  </div>
+</div>
+
+<div id="dataModal" class="modal-wrap hidden">
+  <div class="modal-card wide">
+    <h3>🔒 My data & privacy</h3>
+    <div class="md" style="white-space:normal">
+      <p><b>📱 This browser only:</b> sessions, skills, secrets vault, codebase copies, settings, notes mirror, token counters. Never uploaded anywhere.</p>
+      <p><b>☁️ Your Puter cloud:</b> MEMORY.md, small notes backup, agent memory keys, files/sites you explicitly create or deploy.</p>
+      <p><b>🚫 Never stored:</b> API keys (there are none — keyless by design), chat content on our side (there is no our side — static app).</p>
+    </div>
+    <div class="modal-btns">
+      <button id="btnWipeAll" class="btn ghost" style="border-color:var(--err);color:var(--err)">Delete everything</button>
+      <button id="btnDataClose" class="btn primary">Done</button>
+    </div>
+  </div>
+</div>
+
 <div id="toasts" aria-live="polite"></div>
 <div id="modalWrap" class="modal-wrap hidden">
   <div class="modal-card">
@@ -171,6 +210,11 @@
   </div>
 </div>
 
+<script>
+if ("serviceWorker" in navigator && /^https?:/.test(location.protocol)) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+}
+</script>
 <script src="../js/models.js"></script>
 <script src="../js/ui.js"></script>
 <script src="../js/auth.js"></script>
@@ -180,6 +224,7 @@
 <script src="../js/memory.js"></script>
 <script src="../js/codebase.js"></script>
 <script src="../js/secrets.js"></script>
+<script src="../js/cloud.js"></script>
 <script src="../js/filegen.js"></script>
 <script src="../js/sandbox.js"></script>
 <script src="../js/agent.js"></script>

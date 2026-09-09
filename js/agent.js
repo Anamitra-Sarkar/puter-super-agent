@@ -178,6 +178,47 @@
     return ex.text;
   }
 
+  const fullStore = {};
+  let fullSeq = 0;
+  let lastUserPrompt = "";
+  function storeFull(text) {
+    const id = "m" + (++fullSeq) + Date.now().toString(36);
+    fullStore[id] = String(text || "");
+    const keys = Object.keys(fullStore);
+    if (keys.length > 30) delete fullStore[keys[0]];
+    return id;
+  }
+  function actionsBar(id) {
+    return `<div class="actions-bar">
+      <button data-act="copy" data-mid="${id}" title="Copy answer">📋</button>
+      <button data-act="speak" data-mid="${id}" title="Read aloud">🔊</button>
+      <button data-act="simple" data-mid="${id}" title="Explain simply">🪄</button>
+      <button data-act="translate" data-mid="${id}" title="Translate">🌐</button>
+      <button data-act="note" data-mid="${id}" title="Save as note">📝</button>
+      <button data-act="regen" data-mid="${id}" title="Regenerate">🔁</button>
+    </div>`;
+  }
+  function withActions(bodyEl, fullText) {
+    if (!bodyEl) return;
+    try {
+      const d = document.createElement("div");
+      d.innerHTML = actionsBar(storeFull(fullText));
+      bodyEl.appendChild(d.firstChild);
+    } catch {}
+  }
+
+  let currentUserText = "";
+  function safe(html, userText) {
+    try {
+      const n = window.PuterSafety ? window.PuterSafety.disclaimerFor(userText) : "";
+      return (n || "") + html;
+    } catch { return html; }
+  }
+  function spent(u) {
+    if (!u || !window.PuterSafety) return;
+    try { window.PuterSafety.addSpent((u.in || 0) + (u.out || 0)); } catch {}
+  }
+
   function tokFooter(usage, fallbackText) {
     if (usage) return `<div class="tok-foot">⚡ this reply: ${usage.in.toLocaleString()} in · ${usage.out.toLocaleString()} out (exact)</div>`;
     return `<div class="tok-foot">⚡ ~${TK().fmt(TK().est(fallbackText))} tokens this reply (est.)</div>`;
@@ -251,6 +292,8 @@
       const media = attachments && attachments.find((a) => a.kind === "image");
       const userMsg = { role: "user", content: text + textCtx };
       lastTurn = { user: text, tools: [] };
+      lastUserPrompt = text;
+      currentUserText = text;
       addMsg("user", md(text) + (attachments && attachments.length ? `<p class="muted">📎 ${attachments.length} attachment(s)</p>` : ""));
 
       // Vision fast-path (single turn, no tools). Text-only models can't see: fall back.
@@ -284,9 +327,16 @@
       let exactUsage = null;
       for (;;) {
         if (stopFlag || activeGen !== gen) break;
-        if (steps >= 25) { timeline("25 tool steps reached — wrapping up with what I have."); break; }
+        if (steps >= 200) {
+          // No hard tool budget — but after very long runs, confirm instead of silently spending.
+          const go = await window.PuterUI.chooseModal("Long task — keep going?",
+            `200 tool steps used on this turn. The task may need breaking down. Continue anyway?`,
+            ["Keep going", "Wrap up now"]);
+          if (go !== 0) { timeline("wrapping up after long run."); break; }
+          steps = 0;
+        }
         steps++;
-        timeline(`thinking (step ${steps}/25, ${base.model})…`);
+        timeline(`thinking (step ${steps}, ${base.model})…`);
         const resp = await puter.ai.chat(working, { ...base, tools });
         if (resp && resp.finish_reason === "length") timeline("⚠ output was cut by the model's limit — say 'continue' if the answer looks cut off");
         const u = TK().readUsage(resp);
@@ -463,18 +513,21 @@
     const userText = lastTurn ? lastTurn.user : "";
     const ex = window.PuterCodebase ? window.PuterCodebase.extractCode(finalText, userText) : { text: finalText, files: [] };
     if (ex.files.length) timeline(`📁 saved ${ex.files.length} code file(s) to the Code tab — open them from the cards below`);
-    let html = md(ex.text);
+    spent(usage);
+    let html = safe(md(ex.text), userText);
     if (finishReason === "length") {
       html += `<div class="err-card" style="margin-top:8px"><p><b>Output hit the model's limit</b> — say "continue" and I'll pick up where I stopped.</p></div>`;
     }
     html += tokFooter(usage, finalText);
     const body = addMsg("assistant", html, ex.text, think || null);
     void body;
+    withActions(body, finalText);
     learnLast(finalText);
   }
 
   /** Single-turn call (vision / simple), with think + usage handling. */
   async function runSingle(prompt, mediaPayload, base, streamOn) {
+    currentUserText = typeof prompt === "string" ? prompt : "";
     const t0 = performance.now();
     const msgEl = addMsg("assistant", "", "").parentElement;
     const body = msgEl.querySelector(".body");
@@ -482,7 +535,7 @@
     let think = "", full = "", usage = null, display = null;
     const renderAll = (done) => {
       paintThink(msgEl, think, t0, done);
-      body.innerHTML = md(done && display !== null ? display : full) + (done ? tokFooter(usage, full) : "");
+      body.innerHTML = safe(md(done && display !== null ? display : full) + (done ? tokFooter(usage, full) : ""), currentUserText);
     };
     if (streamOn) {
       try {
@@ -500,6 +553,8 @@
           body.classList.remove("streaming");
           display = present(full, prompt);
           renderAll(true);
+          withActions(body, full);
+          spent(usage);
           meter(TK().est(prompt) + TK().est(full) + TK().est(think), false, M().contextWindow(base.model).size);
           history.push({ role: "user", content: prompt }, { role: "assistant", content: full });
           if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
@@ -517,6 +572,8 @@
     body.classList.remove("streaming");
     display = present(full, prompt);
     renderAll(true);
+    withActions(body, full);
+    spent(usage);
     meter(TK().est(prompt) + TK().est(full), false, M().contextWindow(base.model).size);
     history.push({ role: "user", content: prompt }, { role: "assistant", content: full });
     if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
@@ -532,7 +589,7 @@
     let think = "", full = "", usage = null, display = null;
     const renderAll = (done) => {
       paintThink(msgEl, think, t0, done);
-      body.innerHTML = md(done && display !== null ? display : full) + (done ? tokFooter(usage, full) : "");
+      body.innerHTML = safe(md(done && display !== null ? display : full) + (done ? tokFooter(usage, full) : ""), currentUserText);
     };
     if (streamOn) {
       try {
@@ -553,10 +610,12 @@
           body.classList.remove("streaming");
           display = present(full, lastTurn ? lastTurn.user : "");
           renderAll(true);
+          withActions(body, full);
           working.push({ role: "assistant", content: full });
           history = working.filter((m) => m.role !== "system");
           if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
+          spent(usage);
           meter(TK().estMessages(working), false, M().contextWindow(base.model).size);
           return;
         }
@@ -572,10 +631,12 @@
     body.classList.remove("streaming");
     display = present(full, lastTurn ? lastTurn.user : "");
     renderAll(true);
+    withActions(body, full);
     working.push({ role: "assistant", content: full });
     history = working.filter((m) => m.role !== "system");
     if (window.PuterSessions) window.PuterSessions.note("assistant", display !== null ? display : full, think || null);
           learnLast(full);
+    spent(usage);
     meter(TK().estMessages(working), false, M().contextWindow(base.model).size);
   }
 
@@ -583,6 +644,8 @@
     send, stop, timeline, addMsg, opts, escapeHtml, md,
     isBusy, setBusyHandler,
     getHistory: () => history,
+    getFull: (id) => fullStore[id] || "",
+    getLastPrompt: () => lastUserPrompt,
     clearHistory: () => { history = []; pendingCompaction = null; ledger = []; lastTurn = null; },
     compactHistory,
   };

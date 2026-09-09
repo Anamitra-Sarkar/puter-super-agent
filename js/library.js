@@ -36,6 +36,7 @@
     window.PuterModels.setFamState(st);
     const pill = el("modelPillLabel");
     if (pill) pill.textContent = pillLabel(st);
+    if (window.PuterSafety && window.PuterModels.costOf(id) === "$$$") window.PuterSafety.spendNote("premium");
     render();
   }
   function restore(s) {

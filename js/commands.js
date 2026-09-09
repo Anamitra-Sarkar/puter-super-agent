@@ -11,10 +11,13 @@
     { name: "speak", hint: "<text> — read aloud (OpenAI voice)" },
     { name: "browse", hint: "<url> — fetch + summarize a page" },
     { name: "plan", hint: "<task> — draft a plan, approve, then build" },
+    { name: "build", hint: "<app idea> — full pipeline: plan → build → verify → security → goal-check" },
     { name: "deploy", hint: "[subdomain] — ship this app to *.puter.site" },
     { name: "files", hint: "— list your Puter cloud files" },
     { name: "compact", hint: "— summarize history to free context" },
     { name: "model", hint: "— open the model library" },
+    { name: "note", hint: "[text] — save to Notes (or last answer)" },
+    { name: "template", hint: "— everyday task starters" },
     { name: "new", hint: "— start a new chat" },
     { name: "help", hint: "— show all commands" },
   ];
@@ -73,6 +76,7 @@
         return true;
       case "image": {
         if (!arg) return toast("Usage: /image <prompt>", "info"), true;
+        window.PuterSafety.spendNote("image");
         window.PuterAgent.timeline("🎨 generating image…");
         try {
           const editImg = atts.find((a) => a.kind === "image");
@@ -102,6 +106,7 @@
       }
       case "video": {
         if (!arg) return toast("Usage: /video <prompt> (takes minutes, uses credits)", "info"), true;
+        window.PuterSafety.spendNote("video");
         window.PuterAgent.addMsg("user", "🎬 <b>/video</b> " + arg.replace(/</g, "&lt;"));
         window.PuterAgent.timeline("🎬 generating video — this takes minutes, keep chatting…");
         toast("Video generating in background", "info");
@@ -170,6 +175,12 @@
         runPlan(arg);
         return true;
       }
+      case "build": {
+        if (!arg) return toast("Usage: /build <describe the app or goal>", "info"), true;
+        window.PuterAgent.timeline("🏗 full-build mode: plan → your confirm → build → verify → security/privacy → goal-check → report");
+        runPlan(arg);
+        return true;
+      }
       case "deploy": {
         askDeploy(arg);
         return true;
@@ -191,6 +202,19 @@
       }
       case "model":
         window.PuterLibrary.open();
+        return true;
+      case "note": {
+        if (arg) window.PuterNotes.save(arg.slice(0, 60), arg);
+        else {
+          const turns = window.PuterSessions.getTurns().filter((t) => t.role === "assistant");
+          const last = turns[turns.length - 1];
+          if (!last) return toast("Nothing to save yet", "err"), true;
+          window.PuterNotes.save(last.text.split("\n")[0].slice(0, 60) || "Note", last.text);
+        }
+        return true;
+      }
+      case "template":
+        window.PuterTemplates.open();
         return true;
       case "new":
         window.PuterSessions.newSession();

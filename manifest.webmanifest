@@ -1,0 +1,15 @@
+{
+  "name": "Super-Agent — every AI model, one chat",
+  "short_name": "Super-Agent",
+  "description": "Chat with all OpenAI and Claude models. Keyless via Puter.",
+  "start_url": "/app/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F6F4EE",
+  "theme_color": "#F6F4EE",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

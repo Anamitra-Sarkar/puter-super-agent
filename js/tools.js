@@ -50,6 +50,39 @@
     {
       type: "function",
       function: {
+        name: "spawn_subagent",
+        description: "Orchestrate a SUB-AGENT for part of a complex task (it cannot spawn further agents). Roles: researcher (web-first brief), coder (runnable code), critic (review + fixes), tester (edge cases + test plan), designer (visual direction). Returns its result for you to integrate. Run independent subagents one after another; each call is one subagent.",
+        parameters: {
+          type: "object",
+          properties: {
+            role: { type: "string", description: "researcher | coder | critic | tester | designer" },
+            task: { type: "string" },
+            model: { type: "string", description: "optional override, default cheap" },
+          },
+          required: ["role", "task"],
+        },
+      },
+      _kind: "read",
+    },
+    {
+      type: "function",
+      function: {
+        name: "spawn_swarm",
+        description: "Ask 2-3 models the SAME question in parallel and get all answers back to synthesize. Best for hard decisions and second opinions.",
+        parameters: {
+          type: "object",
+          properties: {
+            question: { type: "string" },
+            models: { type: "array", items: { type: "string" }, description: "optional, default sol+sonnet5+luna" },
+          },
+          required: ["question"],
+        },
+      },
+      _kind: "read",
+    },
+    {
+      type: "function",
+      function: {
         name: "read_code",
         description: "Read files from the Code tab codebase INTO CONTEXT (or list them when path is omitted). ALWAYS use this instead of guessing at uploaded/built code — files do not sit in your context until you read them.",
         parameters: { type: "object", properties: { path: { type: "string" } } },
@@ -246,6 +279,7 @@
         return t.slice(0, 12000);
       }
       case "generate_image": {
+        if (window.PuterSafety) window.PuterSafety.spendNote("image");
         const img = await puter.ai.txt2img(args.prompt, { model: args.model || "gpt-image-1-mini" });
         if (ctx && ctx.onImage) ctx.onImage(img, args.prompt);
         return "Image generated and shown in the Image tab.";
@@ -335,6 +369,31 @@
         if (cb && /^data:/.test(cb.content)) src = cb.content;
         const text = await puter.ai.img2txt(src);
         return String(text).slice(0, 12000) || "(no text found in image)";
+      }
+      case "spawn_subagent": {
+        const roles = {
+          researcher: "You are a researcher subagent. Web-first: use short queries, cite URLs, return a tight brief with sources.",
+          coder: "You are a coder subagent. Return correct runnable code only, complete files, no truncation.",
+          critic: "You are a critic subagent. Find bugs, edge cases, security issues; propose concrete fixes.",
+          tester: "You are a tester subagent. List edge cases and a step-by-step test plan with expected results.",
+          designer: "You are a designer subagent. Give concrete visual direction: layout, palette (no purple/blue gradients), type, spacing.",
+        };
+        const role = roles[args.role] || roles.researcher;
+        const r = await puter.ai.chat(
+          [{ role: "system", content: role + " Keep it focused and under 800 words." },
+           { role: "user", content: String(args.task || "").slice(0, 4000) }],
+          { model: args.model || "gpt-5.6-luna", normalize: true });
+        return `[subagent:${args.role}]\n` + window.PuterModels.extractText(r).slice(0, 6000);
+      }
+      case "spawn_swarm": {
+        const team = (Array.isArray(args.models) && args.models.length ? args.models : ["gpt-5.6-sol", "claude-sonnet-5", "gpt-5.6-luna"]).slice(0, 3);
+        const jobs = team.map(async (m) => {
+          try {
+            const r = await puter.ai.chat(String(args.question || "").slice(0, 3000), { model: m, normalize: true });
+            return `--- ${m} ---\n` + window.PuterModels.extractText(r).slice(0, 4000);
+          } catch (e) { return `--- ${m} --- FAILED: ${String((e && e.message) || e).slice(0, 200)}`; }
+        });
+        return (await Promise.all(jobs)).join("\n\n");
       }
       case "memory_read": {
         const m = window.PuterMemory ? await window.PuterMemory.load() : "";

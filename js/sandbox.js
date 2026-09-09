@@ -225,6 +225,9 @@ Reply in 6 bullets max: 3 biggest visual problems with concrete fixes, then a 1-
       [/http:\/\/(?!localhost|127\.0\.0\.1)/, "insecure http:// URL (mixed content)"],
       [/\beval\s*\(/, "eval() usage"],
       [/document\.write\s*\(/, "document.write usage"],
+      [/https?:\/\/(www\.)?(google-analytics|googletagmanager|connect\.facebook|hotjar|mixpanel|segment\.io)\//, "third-party tracker (review: confirm intended for privacy)"],
+      [/localStorage\s*\.\s*setItem\s*\([^)]*(token|secret|password|api[_-]?key)/i, "possible secret in localStorage (review privacy)"],
+      [/fetch\s*\(\s*["']https?:\/\/(?!localhost|127\.0\.0\.1|cdnjs|cdn\.jsdelivr|unpkg)/, "network call to external host (review: confirm intended for privacy)"],
     ];
     for (const [re, label] of pats) if (re.test(src)) hits.push(label);
     return hits;

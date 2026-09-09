@@ -163,6 +163,13 @@
   }
 
   function queueOrSend(text, atts) {
+    if (!navigator.onLine) {
+      window.PuterCloud.stash(text);
+      toast("Offline — queued on this device", "err");
+      return;
+    }
+    window.PuterCloud.checkpointStart(text, el("modelSelect").value);
+    window.__hadSend = true;
     if (window.PuterAgent.isBusy()) {
       queue.push({ text, atts: atts || [] });
       renderQueue();
@@ -194,7 +201,17 @@
     const text = el("userInput").value.trim();
     const hasFiles = el("fileInput").files.length > 0;
     if (!text && !hasFiles) return;
+    if (!navigator.onLine) {
+      el("userInput").value = "";
+      window.PuterCloud.stash(text || "[attachment]");
+      el("fileInput").value = "";
+      renderAttachChips([]);
+      toast("Offline — queued on this device, sends on reconnect", "err");
+      return;
+    }
     if (await window.PuterCommands.handle(text)) { el("userInput").value = ""; return; }
+    window.PuterCloud.checkpointStart(text, el("modelSelect").value);
+    window.__hadSend = true;
     const atts = await collectAttachments();
     el("userInput").value = "";
     window.PuterCommands.hide();
@@ -244,7 +261,10 @@
 
     window.PuterAgent.setBusyHandler((busy) => {
       setSendBtn(busy ? "stop" : "send");
-      if (!busy) setTimeout(drainQueue, 120);
+      if (!busy) {
+        if (window.__hadSend) { window.__hadSend = false; window.PuterCloud.checkpointDone(); }
+        setTimeout(drainQueue, 120);
+      }
     });
 
     // Header
@@ -298,7 +318,7 @@
 
     // Skills
     // Skills (multi-toggle list renders itself)
-    el("btnSkillSave").onclick = () => window.PuterSkills.saveFromInputs();
+    // Skills (inline editor lives in the list itself)
 
     // Codebase + secrets
     el("btnCodeUpload").onclick = () => el("codeFileInput").click();
@@ -400,6 +420,25 @@
       const saved = localStorage.getItem("spa_approval");
       if (saved && [...el("approvalMode").options].some((o) => o.value === saved)) el("approvalMode").value = saved;
     } catch {}
+    // Toggles + system prompt (persisted — survive relogin, shared by all chats)
+    try {
+      const prefs = JSON.parse(localStorage.getItem("spa_prefs") || "{}");
+      if (typeof prefs.stream === "boolean") el("streamToggle").checked = prefs.stream;
+      if (typeof prefs.search === "boolean") el("webSearchToggle").checked = prefs.search;
+      if (typeof prefs.sys === "string") el("systemPrompt").value = prefs.sys;
+    } catch {}
+    const savePrefs = () => {
+      try {
+        localStorage.setItem("spa_prefs", JSON.stringify({
+          stream: el("streamToggle").checked,
+          search: el("webSearchToggle").checked,
+          sys: el("systemPrompt").value,
+        }));
+      } catch {}
+    };
+    el("streamToggle").onchange = savePrefs;
+    el("webSearchToggle").onchange = savePrefs;
+    el("systemPrompt").oninput = savePrefs;
     el("approvalMode").onchange = (e) => {
       try { localStorage.setItem("spa_approval", e.target.value); } catch {}
       toast(e.target.value === "beast"
@@ -408,6 +447,44 @@
     };
     el("btnNewChat").onclick = () => { window.PuterSessions.newSession(); toast("New chat started", "info"); };
     el("btnExportSession").onclick = () => window.PuterSessions.export();
+
+    // Templates, notes, budget, onboarding, data controls
+    el("btnTemplates").onclick = () => window.PuterTemplates.open();
+    el("notesSearch").oninput = (e) => window.PuterNotes.render(e.target.value);
+    window.PuterNotes.render();
+    const bi = el("budgetInput");
+    bi.value = window.PuterSafety.budgetCap() || "";
+    bi.onchange = () => {
+      const n = parseInt(bi.value, 10) || 0;
+      window.PuterSafety.setBudgetCap(n);
+      toast(n ? `Budget: ${n.toLocaleString()} tokens/mo` : "Budget off", "info");
+    };
+    let hideOb = false;
+    try { hideOb = localStorage.getItem("spa_onboard") === "1"; } catch {}
+    if (!hideOb) el("onboardOverlay").classList.remove("hidden");
+    el("btnOnboardGo").onclick = () => {
+      if (el("onboardHide").checked) { try { localStorage.setItem("spa_onboard", "1"); } catch {} }
+      el("onboardOverlay").classList.add("hidden");
+    };
+    el("btnDataControls").onclick = () => { el("accountMenu").classList.add("hidden"); el("dataModal").classList.remove("hidden"); };
+    el("btnDataClose").onclick = () => el("dataModal").classList.add("hidden");
+    el("dataModal").onclick = (e) => { if (e.target === el("dataModal")) el("dataModal").classList.add("hidden"); };
+    el("btnWipeAll").onclick = async () => {
+      if (!(await window.PuterUI.confirmModal("Delete everything?",
+        "Clears browser data (sessions, skills, secrets, codebase, notes mirror, settings) AND your cloud keys (MEMORY.md, notes, agent memory). Cannot be undone.", "Delete all"))) return;
+      try {
+        Object.keys(localStorage).filter((k) => k.startsWith("spa_") || k.startsWith("puter-super-agent")).forEach((k) => localStorage.removeItem(k));
+        let keys = [];
+        try { keys = await puter.kv.list(); } catch {}
+        const arr = Array.isArray(keys) ? keys : (keys && keys.keys) || [];
+        for (const k of arr) {
+          const name = typeof k === "string" ? k : k.key;
+          if (/^(agent_memory_md|agentmem_|note_|pv_|site_)/.test(name || "")) { try { await puter.kv.del(name); } catch {} }
+        }
+      } catch {}
+      toast("Wiped. Reloading…", "info");
+      setTimeout(() => location.reload(), 900);
+    };
     el("btnPreviewClear").onclick = () => window.PuterSandbox.clear();
     el("previewFileSel").onchange = (e) => {
       const f = window.PuterCodebase.get(e.target.value);
@@ -435,14 +512,57 @@
       }
     });
 
-    // Open file cards from chat in the Code tab
-    document.addEventListener("click", (e) => {
-      const b = e.target.closest("[data-open-code]");
-      if (!b) return;
-      if (window.PuterCodebase) window.PuterCodebase.setActive(b.dataset.openCode);
-      window.PuterDock.open("code");
+    // Answer-action toolbar (delegated)
+    const excerpt = (t, n) => String(t || "").slice(0, n || 2000);
+    document.addEventListener("click", async (e) => {
+      const b = e.target.closest("[data-act]");
+      if (b) {
+        const full = window.PuterAgent.getFull(b.dataset.mid);
+        if (!full) return toast("Answer expired from memory", "err");
+        if (b.dataset.act === "copy") {
+          try { await navigator.clipboard.writeText(full); toast("Copied", "ok"); }
+          catch { toast("Copy blocked by browser", "err"); }
+        } else if (b.dataset.act === "speak") {
+          try {
+            const a = await puter.ai.txt2speech(full.slice(0, 2900), { provider: "openai", model: "gpt-4o-mini-tts", voice: "alloy" });
+            a.play().catch(() => {});
+            toast("Reading aloud", "ok");
+          } catch (err) { toast("Speech failed", "err"); }
+        } else if (b.dataset.act === "simple") {
+          sendText("Explain simply, like I'm 12 (short):\n\n" + excerpt(full));
+        } else if (b.dataset.act === "translate") {
+          const langs = ["Spanish", "Hindi", "French", "Bengali", "German", "Tamil"];
+          const i = await window.PuterUI.chooseModal("Translate answer", "Pick a target language:", langs);
+          if (i >= 0) sendText(`Translate into ${langs[i]}, keep formatting:\n\n` + excerpt(full, 3000));
+        } else if (b.dataset.act === "note") {
+          window.PuterNotes.save(full.split("\n")[0].slice(0, 60) || "Note", full);
+        } else if (b.dataset.act === "regen") {
+          const p = window.PuterAgent.getLastPrompt();
+          if (p) sendText(p);
+          else toast("Nothing to regenerate", "err");
+        }
+        return;
+      }
+      const ob = e.target.closest("[data-open-code]");
+      if (ob) {
+        if (window.PuterCodebase) window.PuterCodebase.setActive(ob.dataset.openCode);
+        window.PuterDock.open("code");
+      }
     });
+    function sendText(text) {
+      if (window.PuterAgent.isBusy()) {
+        toast("Busy — queued after current answer", "info");
+        (function q() {
+          if (window.PuterAgent.isBusy()) return setTimeout(q, 800);
+          window.PuterAgent.send(text, []);
+        })();
+        return;
+      }
+      window.PuterAgent.send(text, []);
+    }
 
     window.PuterAgent.timeline("Ready — chat, or type / for commands.");
+    window.PuterCloud.flush();
+    setTimeout(() => window.PuterCloud.checkResume(), 1500);
   });
 })();
