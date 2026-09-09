@@ -144,6 +144,15 @@
     {
       type: "function",
       function: {
+        name: "set_theme",
+        description: "Generate an aesthetic background image and apply it LIVE to this app's UI (body background + hero accents). Describe mood/colors, e.g. 'warm paper texture with terracotta sun'. Use sparingly — one theme at a time.",
+        parameters: { type: "object", properties: { prompt: { type: "string" } }, required: ["prompt"] },
+      },
+      _kind: "write",
+    },
+    {
+      type: "function",
+      function: {
         name: "fetch_file",
         description: "Download any public file (data, image, doc) via CORS-free fetch and save it into the Code tab codebase and optionally Puter cloud storage. No restrictions beyond public URLs.",
         parameters: { type: "object", properties: { url: { type: "string" }, saveAs: { type: "string" }, toCloud: { type: "boolean" } }, required: ["url", "saveAs"] },
@@ -339,6 +348,10 @@
       }
       case "make_file": {
         return await window.PuterFilegen.makeFile(args.filename, args.content);
+      }
+      case "set_theme": {
+        const url = await window.PuterTheme.generate(args.prompt || "warm minimal abstract");
+        return url ? "Theme applied live to the app UI." : "Theme generation failed; UI unchanged.";
       }
       case "fetch_file": {
         const r = await puter.net.fetch(args.url);

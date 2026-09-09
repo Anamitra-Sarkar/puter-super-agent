@@ -7,6 +7,7 @@
     { name: "image", hint: "<prompt> — generate (or attach an image to edit it)" },
     { name: "video", hint: "<prompt> — generate a short AI video (takes minutes)" },
     { name: "zip", hint: "— download the whole codebase as .zip" },
+    { name: "theme", hint: "<prompt|reset> — AI paints this app's background" },
     { name: "vision", hint: "<question> — analyze the attached image" },
     { name: "speak", hint: "<text> — read aloud (OpenAI voice)" },
     { name: "browse", hint: "<url> — fetch + summarize a page" },
@@ -124,6 +125,12 @@
       }
       case "zip": {
         window.PuterFilegen.downloadCodebaseZip();
+        return true;
+      }
+      case "theme": {
+        if (!arg || /^reset|off|remove$/i.test(arg)) { window.PuterTheme.reset(); return true; }
+        window.PuterAgent.addMsg("user", "🎨 <b>/theme</b> " + arg.replace(/</g, "&lt;"));
+        await window.PuterTheme.generate(arg);
         return true;
       }
       case "vision": {

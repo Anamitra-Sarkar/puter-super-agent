@@ -197,39 +197,46 @@
     }
   }
 
+  let sending = false; // sync re-entrancy lock: double-Enter can never double-send
   async function sendCurrent(interrupt) {
+    if (sending) return;
     const text = el("userInput").value.trim();
     const hasFiles = el("fileInput").files.length > 0;
     if (!text && !hasFiles) return;
-    if (!navigator.onLine) {
-      el("userInput").value = "";
-      window.PuterCloud.stash(text || "[attachment]");
-      el("fileInput").value = "";
-      renderAttachChips([]);
-      toast("Offline — queued on this device, sends on reconnect", "err");
-      return;
-    }
-    if (await window.PuterCommands.handle(text)) { el("userInput").value = ""; return; }
-    window.PuterCloud.checkpointStart(text, el("modelSelect").value);
-    window.__hadSend = true;
-    const atts = await collectAttachments();
-    el("userInput").value = "";
+    el("userInput").value = ""; // clear immediately, no matter what happens next
     window.PuterCommands.hide();
-    if (!text && !atts.length) return; // zip-only sends are handled by the unzip flow
-    if (interrupt && window.PuterAgent.isBusy()) {
-      window.PuterAgent.stop(); // invalidate in-flight work via generation counter
-      queue.length = 0; renderQueue();
-      // small beat so the old loop observes the stop before the new send starts
-      setTimeout(() => window.PuterAgent.send(text, atts), 60);
-      return;
+    sending = true;
+    try {
+      if (!navigator.onLine) {
+        window.PuterCloud.stash(text || "[attachment]");
+        el("fileInput").value = "";
+        renderAttachChips([]);
+        toast("Offline — queued on this device, sends on reconnect", "err");
+        return;
+      }
+      if (await window.PuterCommands.handle(text)) return;
+      window.PuterCloud.checkpointStart(text, el("modelSelect").value);
+      window.__hadSend = true;
+      const atts = await collectAttachments();
+      if (!text && !atts.length) return; // zip-only sends are handled by the unzip flow
+      if (interrupt && window.PuterAgent.isBusy()) {
+        window.PuterAgent.stop(); // invalidate in-flight work via generation counter
+        queue.length = 0; renderQueue();
+        // route via queue so it fires only after the old turn fully settles
+        queue.unshift({ text, atts });
+        renderQueue();
+        return;
+      }
+      if (window.PuterAgent.isBusy()) {
+        queue.push({ text, atts });
+        renderQueue();
+        toast(`Queued (#${queue.length}) — sends when the current answer finishes`, "info");
+        return;
+      }
+      queueOrSend(text, atts);
+    } finally {
+      sending = false;
     }
-    if (window.PuterAgent.isBusy()) {
-      queue.push({ text, atts });
-      renderQueue();
-      toast(`Queued (#${queue.length}) — sends when the current answer finishes`, "info");
-      return;
-    }
-    queueOrSend(text, atts);
   }
 
   function drainQueue() {

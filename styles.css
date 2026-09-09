@@ -286,6 +286,13 @@ input[type=range]{accent-color:var(--accent);width:100%}
 .live-id{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:3px 11px;
   font-size:11.5px;font-family:ui-monospace,monospace;cursor:pointer;color:var(--ink2)}
 .live-id:hover{border-color:var(--accent);color:var(--accent-ink)}
+/* AI-generated theme layer (subtle, readable) */
+body.themed{background-color:#141210}
+body.themed::before{content:"";position:fixed;inset:0;z-index:-1;
+  background-image:var(--theme-img);background-size:cover;background-position:center;
+  opacity:.5;filter:saturate(1.05)}
+body.themed::after{content:"";position:fixed;inset:0;z-index:-1;
+  background:linear-gradient(180deg,rgba(246,244,238,.88),rgba(246,244,238,.72))}
 /* Phase-1: actions, templates, notices, onboarding, notes, ask */
 .actions-bar{display:flex;gap:4px;margin-top:8px;opacity:.75;transition:opacity .2s}
 .actions-bar:hover{opacity:1}
