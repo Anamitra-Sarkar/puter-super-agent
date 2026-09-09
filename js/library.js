@@ -96,17 +96,6 @@
         }));
         d.appendChild(seg);
       }
-      if (f.fastLow || f.fastHigh) {
-        const ft = document.createElement("button");
-        ft.className = "fast-toggle" + (selFid && st.fast ? " on" : "");
-        ft.textContent = selFid && st.fast ? "⚡ Fast on" : "Fast";
-        ft.onclick = (e) => {
-          e.stopPropagation();
-          applyCombo(f.id, selFid ? st.reasoning : "low", !(selFid && st.fast));
-          ok(f.name + " fast " + (!(selFid && st.fast) ? "on" : "off"));
-        };
-        d.appendChild(ft);
-      }
       d.onclick = () => {
         applyCombo(f.id, selFid ? st.reasoning : "low", selFid ? st.fast : false);
         close();
@@ -115,6 +104,44 @@
       grid.appendChild(d);
     }
     if (!grid.children.length) grid.innerHTML = '<div class="muted" style="padding:16px">No models match.</div>';
+    renderLiveExtras(grid, q);
+  }
+  let liveCache = null;
+  async function liveExtras() {
+    if (liveCache) return liveCache;
+    try {
+      const ids = await window.PuterModels.liveModelIds();
+      const covered = new Set();
+      for (const f of window.PuterModels.FAMILIES) {
+        [f.single, f.low, f.high, f.fastLow, f.fastHigh].forEach((x) => x && covered.add(x));
+      }
+      liveCache = ids.filter((id) => {
+        if (!id || id.includes(":") || covered.has(id)) return false;
+        if (/batch|image|audio|tts|transcribe|whisper|embedding|moderation|realtime/i.test(id)) return false;
+        return /gpt|o1|o3|o4|codex|claude|openai|anthropic/i.test(id);
+      }).slice(0, 120);
+    } catch { liveCache = []; }
+    return liveCache;
+  }
+  async function renderLiveExtras(grid, q) {
+    const ids = await liveExtras();
+    const list = ids.filter((id) => !q || id.toLowerCase().includes(q));
+    if (!list.length) return;
+    const det = document.createElement("details");
+    det.className = "live-all";
+    det.innerHTML = `<summary>Every model ID — live list (${list.length} more)</summary>`;
+    const wrap = document.createElement("div");
+    wrap.className = "live-ids";
+    for (const id of list) {
+      const b = document.createElement("button");
+      b.className = "live-id";
+      b.textContent = id;
+      b.title = "Use " + id;
+      b.onclick = () => { apply(id); close(); ok(id); };
+      wrap.appendChild(b);
+    }
+    det.appendChild(wrap);
+    grid.appendChild(det);
   }
   function ok(m) { if (window.PuterUI) window.PuterUI.toast(m, "ok"); }
   function open() {
